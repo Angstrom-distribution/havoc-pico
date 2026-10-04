@@ -26,6 +26,7 @@
 #include "xdg-decoration-unstable-v1.h"
 #include "fractional-scale-v1.h"
 #include "viewporter.h"
+#include "text-input-unstable-v3.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -63,6 +64,8 @@ static struct {
 	bool shm_argb;
 	struct xdg_wm_base *wm_base;
 	struct wl_seat *seat;
+	struct zwp_text_input_manager_v3 *tim;
+	struct zwp_text_input_v3 *ti;
 
 	struct wl_surface *surf;
 	struct xdg_surface *xdgsurf;
@@ -1006,6 +1009,72 @@ static void kbd_leave(void *data, struct wl_keyboard *k, uint32_t serial,
 	reset_repeat();
 }
 
+/* Text input exists only so that the compositor knows a text field has the
+ * focus and can show an on-screen keyboard. Keys, including the ones from an
+ * on-screen keyboard, keep arriving through wl_keyboard, so the text and
+ * preedit events are ignored. The compositor sends enter and leave when the
+ * keyboard focus moves to or from the surface; enabling there means once per
+ * focus, never per key, so an on-screen keyboard that was hidden by hand
+ * stays hidden until the focus comes back. */
+static void ti_enter(void *data, struct zwp_text_input_v3 *ti,
+		     struct wl_surface *surf)
+{
+	int x = destination(term.margin.left);
+	int y = destination(term.margin.top);
+	int w = destination(term.cwidth);
+	int h = destination(term.cheight);
+
+	if (term.screen) {
+		x += destination(term.cwidth *
+				 tsm_screen_get_cursor_x(term.screen));
+		y += destination(term.cheight *
+				 tsm_screen_get_cursor_y(term.screen));
+	}
+
+	zwp_text_input_v3_enable(ti);
+	zwp_text_input_v3_set_content_type(ti,
+		ZWP_TEXT_INPUT_V3_CONTENT_HINT_NONE,
+		ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_TERMINAL);
+	zwp_text_input_v3_set_cursor_rectangle(ti, x, y, w, h);
+	zwp_text_input_v3_commit(ti);
+}
+
+static void ti_leave(void *data, struct zwp_text_input_v3 *ti,
+		     struct wl_surface *surf)
+{
+	zwp_text_input_v3_disable(ti);
+	zwp_text_input_v3_commit(ti);
+}
+
+static void ti_preedit_string(void *data, struct zwp_text_input_v3 *ti,
+			      const char *text, int32_t begin, int32_t end)
+{
+}
+
+static void ti_commit_string(void *data, struct zwp_text_input_v3 *ti,
+			     const char *text)
+{
+}
+
+static void ti_delete_surrounding_text(void *data,
+				       struct zwp_text_input_v3 *ti,
+				       uint32_t before, uint32_t after)
+{
+}
+
+static void ti_done(void *data, struct zwp_text_input_v3 *ti, uint32_t serial)
+{
+}
+
+static const struct zwp_text_input_v3_listener ti_listener = {
+	.enter = ti_enter,
+	.leave = ti_leave,
+	.preedit_string = ti_preedit_string,
+	.commit_string = ti_commit_string,
+	.delete_surrounding_text = ti_delete_surrounding_text,
+	.done = ti_done,
+};
+
 static xkb_keysym_t compose(xkb_keysym_t sym)
 {
 	if (!term.xkb_compose_state)
@@ -1692,6 +1761,9 @@ static void registry_get(void *data, struct wl_registry *r, uint32_t id,
 	} else if (strcmp(i, "zxdg_decoration_manager_v1") == 0) {
 		term.deco.manager = wl_registry_bind(r, id,
 			&zxdg_decoration_manager_v1_interface, 1);
+	} else if (strcmp(i, "zwp_text_input_manager_v3") == 0) {
+		term.tim = wl_registry_bind(r, id,
+			&zwp_text_input_manager_v3_interface, 1);
 	} else if (strcmp(i, "wp_viewporter") == 0) {
 		term.vpm = wl_registry_bind(r, id, &wp_viewporter_interface, 1);
 	} else if (strcmp(i, "wp_fractional_scale_manager_v1") == 0) {
@@ -2208,6 +2280,12 @@ retry:
 							     NULL);
 	}
 
+	if (term.tim && term.seat) {
+		term.ti = zwp_text_input_manager_v3_get_text_input(term.tim,
+								   term.seat);
+		zwp_text_input_v3_add_listener(term.ti, &ti_listener, NULL);
+	}
+
 	term.paste.fd[0] = -1;
 
 	struct pollfd pollfds[NUM_POLLFDS] = {
@@ -2257,6 +2335,8 @@ retry:
 		wl_data_device_release(term.d_d);
 	if (term.ps_d)
 		zwp_primary_selection_device_v1_destroy(term.ps_d);
+	if (term.ti)
+		zwp_text_input_v3_destroy(term.ti);
 	if (term.ptr)
 		wl_pointer_release(term.ptr);
 	if (term.kbd)
@@ -2288,6 +2368,8 @@ eglobals:
 		wp_fractional_scale_v1_destroy(term.fs);
 	if (term.fsm)
 		wp_fractional_scale_manager_v1_destroy(term.fsm);
+	if (term.tim)
+		zwp_text_input_manager_v3_destroy(term.tim);
 	if (term.ps_dm)
 		zwp_primary_selection_device_manager_v1_destroy(term.ps_dm);
 	if (term.d_dm)

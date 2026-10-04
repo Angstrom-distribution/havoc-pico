@@ -22,7 +22,8 @@ XML = \
 	xdg-decoration-unstable-v1.xml \
 	primary-selection-unstable-v1.xml \
 	viewporter.xml \
-	fractional-scale-v1.xml
+	fractional-scale-v1.xml \
+	text-input-unstable-v3.xml
 
 GEN = \
 	xdg-shell.h \
@@ -34,7 +35,9 @@ GEN = \
 	viewporter.h \
 	viewporter.c \
 	fractional-scale-v1.h \
-	fractional-scale-v1.c
+	fractional-scale-v1.c \
+	text-input-unstable-v3.h \
+	text-input-unstable-v3.c
 
 OBJ = \
 	main.o \
@@ -44,6 +47,7 @@ OBJ = \
 	primary-selection-unstable-v1.o \
 	viewporter.o \
 	fractional-scale-v1.o \
+	text-input-unstable-v3.o \
 	tsm/wcwidth.o \
 	tsm/shl-htable.o \
 	tsm/tsm-render.o \
@@ -84,6 +88,9 @@ viewporter.xml:
 
 fractional-scale-v1.xml:
 	cp $(WAYLAND_PROTOCOLS_DIR)/staging/fractional-scale/$@ $@
+
+text-input-unstable-v3.xml:
+	cp $(WAYLAND_PROTOCOLS_DIR)/unstable/text-input/$@ $@
 
 install: havoc
 	mkdir -p $(DESTDIR)$(BINDIR)
