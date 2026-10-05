@@ -48,12 +48,28 @@ enum evfd {
 	NUM_POLLFDS,
 };
 
+/* Everything that decides which pixels a cell gets, with the colours as
+ * paint_cell uses them (inverse applied) and no padding bytes, so that two
+ * cells paint the same pixels exactly when their keys are memcmp equal.
+ * libtsm's own ages cannot say that: it stamps the whole screen on every
+ * erase, scroll, selection and colour change. */
+struct cell_key {
+	uint32_t id;
+	uint32_t fg, bg;
+	uint8_t width;
+	uint8_t pad[3];
+};
+
+enum {
+	CELL_PAINT = 1,
+	CELL_DAMAGE = 2,
+};
+
 static struct {
 	bool die;
 	bool configured;
 	bool need_redraw;
 	bool can_redraw;
-	int resize;
 
 	int master_fd;
 
@@ -79,10 +95,23 @@ static struct {
 		struct wl_buffer *b;
 		void *data;
 		int size;
+		int w, h, cols, rows;
 		bool busy;
-		tsm_age_t age;
+		/* whether shadow holds what is painted in data */
+		bool valid;
+		struct cell_key *shadow;
+		uint32_t margin;
 	} buf[2];
 	struct wl_callback *cb;
+
+	/* The cells as of the redraw being made, and as of the last committed
+	 * frame (what the compositor shows), sized col * row. */
+	struct cell_key *cur, *shown;
+	uint32_t *cur_ch;
+	uint8_t *flags;
+	bool shown_valid;
+	uint32_t shown_margin;
+	bool full_redraw;
 
 	int col, row;
 	int cwidth, cheight;
@@ -599,13 +628,19 @@ static int buffer_init(struct buffer *buf)
 	}
 
 	pool = wl_shm_create_pool(term.shm, fd, buf->size);
+	/* Nothing is blended onto an opaque window, so say so */
 	buf->b = wl_shm_pool_create_buffer(pool, 0, term.width, term.height,
-					   stride, WL_SHM_FORMAT_ARGB8888);
+					   stride,
+					   term.cfg.opacity == 255
+					   ? WL_SHM_FORMAT_XRGB8888
+					   : WL_SHM_FORMAT_ARGB8888);
 	wl_buffer_add_listener(buf->b, &buffer_listener, buf);
 	wl_shm_pool_destroy(pool);
 	close(fd);
 
-	buf->age = 0;
+	buf->w = term.width;
+	buf->h = term.height;
+	buf->valid = false;
 
 	return 0;
 }
@@ -616,6 +651,12 @@ static void buffer_unmap(struct buffer *buf)
 		wl_buffer_destroy(buf->b);
 		munmap(buf->data, buf->size);
 	}
+	free(buf->shadow);
+	buf->b = NULL;
+	buf->data = NULL;
+	buf->shadow = NULL;
+	buf->cols = buf->rows = 0;
+	buf->valid = false;
 }
 
 static struct buffer *swap_buffers(void)
@@ -633,11 +674,24 @@ static struct buffer *swap_buffers(void)
 		return NULL;
 	}
 
-	if (term.resize) {
-		--term.resize;
+	/* Each buffer is checked on its own: a buffer that was busy while the
+	 * window was resized keeps its old size, and one that was never used
+	 * has no memory yet. */
+	if (!buf->b || buf->w != term.width || buf->h != term.height) {
 		buffer_unmap(buf);
 		if (buffer_init(buf) < 0)
 			abort();
+	}
+
+	if (buf->cols != term.col || buf->rows != term.row) {
+		free(buf->shadow);
+		buf->shadow = calloc(term.col * term.row,
+				     sizeof(*buf->shadow));
+		if (buf->shadow == NULL)
+			abort();
+		buf->cols = term.col;
+		buf->rows = term.row;
+		buf->valid = false;
 	}
 
 	return buf;
@@ -665,7 +719,9 @@ static void blank(uint32_t *dst, int w, u8 br, u8 bg, u8 bb, u8 ba)
 	}
 }
 
-static void print(uint32_t *dst, int w,
+/* Only vis of the w cells of the glyph fit before the right edge of the grid;
+ * writing the rest would land on the next row of pixels. */
+static void print(uint32_t *dst, int w, int vis,
 		  u8 br, u8 bg, u8 bb,
 		  u8 fr, u8 fg, u8 fb,
 		  u8 ba, unsigned char *glyph)
@@ -674,12 +730,13 @@ static void print(uint32_t *dst, int w,
 	int h = term.cheight;
 
 	w *= term.cwidth;
+	vis *= term.cwidth;
 
 	br = mul(br, ba);
 	bg = mul(bg, ba);
 	bb = mul(bb, ba);
 	while (h--) {
-		for (i = 0; i < w; ++i) {
+		for (i = 0; i < vis; ++i) {
 			u8 fa = glyph[i];
 			if (fa == 0) {
 				dst[i] = join(ba, br, bg, bb);
@@ -699,50 +756,73 @@ static void print(uint32_t *dst, int w,
 	}
 }
 
-static void draw_cell(struct tsm_screen *tsm, uint32_t id, const uint32_t *ch,
-		      size_t len, int char_width, int x, int y,
-		      const struct tsm_screen_attr *a, tsm_age_t age,
-		      void *data)
+static void collect_cell(struct tsm_screen *tsm, uint32_t id,
+			 const uint32_t *ch, size_t len, int char_width,
+			 int x, int y, const struct tsm_screen_attr *a,
+			 tsm_age_t age, void *data)
 {
-	struct buffer *buffer = data;
-	uint32_t *dst = buffer->data;
+	int i = y * term.col + x;
+	struct cell_key *k = &term.cur[i];
+	u8 inv = a->inverse ? 0xff : 0;
 
-	if (age && age <= buffer->age)
-		return;
+	memset(k, 0, sizeof(*k));
+	k->width = char_width;
+	k->bg = join(0, a->br ^ inv, a->bg ^ inv, a->bb ^ inv);
+	/* a blank cell has no foreground, so the colour must not tell two
+	 * of them apart; the second half of a wide cell is blank for the
+	 * same reason, whatever character it was left holding */
+	if (len && char_width) {
+		k->id = id;
+		k->fg = join(0, a->fr ^ inv, a->fg ^ inv, a->fb ^ inv);
+		term.cur_ch[i] = ch[0];
+	}
+}
+
+static void paint_cell(struct buffer *buffer, int x, int y)
+{
+	int i = y * term.col + x;
+	const struct cell_key *k = &term.cur[i];
+	uint32_t *dst = buffer->data;
+	int w = k->width;
+	int vis;
+	u8 br = k->bg >> 16, bg = k->bg >> 8, bb = k->bg;
+
+	if (w == 0) {
+		/* The second half of a wide cell is drawn with the first.
+		 * Anything else (the first half was overwritten) would
+		 * otherwise keep the old half glyph on screen. */
+		if (x > 0 && term.cur[i - 1].width == 2)
+			return;
+		w = 1;
+	}
+	vis = x + w > term.col ? term.col - x : w;
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
 
-	if (len == 0) {
-		if (a->inverse)
-			blank(dst, char_width,
-			      ~a->br, ~a->bg, ~a->bb, term.cfg.opacity);
-		else
-			blank(dst, char_width,
-			      a->br, a->bg, a->bb, term.cfg.opacity);
+	if (k->id == 0) {
+		blank(dst, vis, br, bg, bb, term.cfg.opacity);
 	} else {
 		/* todo, combining marks */
-		unsigned char *g = get_glyph(id, ch[0], char_width);
+		unsigned char *g = get_glyph(k->id, term.cur_ch[i], w);
 
-		if (a->inverse)
-			print(dst, char_width,
-			      ~a->br, ~a->bg, ~a->bb,
-			      ~a->fr, ~a->fg, ~a->fb,
-			      term.cfg.opacity, g);
-		else
-			print(dst, char_width,
-			      a->br, a->bg, a->bb,
-			      a->fr, a->fg, a->fb,
-			      term.cfg.opacity, g);
+		print(dst, w, vis, br, bg, bb,
+		      k->fg >> 16, k->fg >> 8, k->fg,
+		      term.cfg.opacity, g);
 	}
 }
 
-static void draw_margin(struct buffer *buffer)
+static uint32_t margin_colour(void)
 {
-	uint32_t *dst = buffer->data;
 	uint8_t a = term.cfg.opacity;
 	uint8_t *rgb = tsm_screen_get_background(term.screen);
-	uint32_t c = join(a, mul(rgb[0], a), mul(rgb[1], a), mul(rgb[2], a));
+
+	return join(a, mul(rgb[0], a), mul(rgb[1], a), mul(rgb[2], a));
+}
+
+static void draw_margin(struct buffer *buffer, uint32_t c)
+{
+	uint32_t *dst = buffer->data;
 	int inw = term.col * term.cwidth;
 	int inh = term.row * term.cheight;
 	int i, j;
@@ -776,22 +856,203 @@ static const struct wl_callback_listener frame_listener = {
 	.done = frame_callback,
 };
 
+/* Spread a flag over the cells that share pixels with a flagged wide cell, the
+ * same way before and after the change (old is what the flag is relative to):
+ * painting either half of a wide cell touches both. */
+static void spread_wide(uint8_t bit, const struct cell_key *old)
+{
+	int x, y;
+
+	for (y = 0; y < term.row; ++y) {
+		const struct cell_key *c = &term.cur[y * term.col];
+		const struct cell_key *o = &old[y * term.col];
+		uint8_t *f = &term.flags[y * term.col];
+
+		for (x = term.col - 1; x > 0; --x)
+			if ((f[x] & bit) && c[x].width == 0)
+				f[x - 1] |= bit;
+		for (x = 0; x < term.col - 1; ++x)
+			if ((f[x] & bit) &&
+			    (c[x].width == 2 || o[x].width == 2 ||
+			     c[x + 1].width == 0))
+				f[x + 1] |= bit;
+	}
+}
+
+struct rect {
+	int x0, x1, y0, y1;
+};
+
+#define MAX_RECTS 8
+
+/* The flagged cells as rectangles of cells, row spans that overlap the span
+ * above joined into one. Returns -1 when there would be more than MAX_RECTS. */
+static int damage_rects(struct rect *r)
+{
+	int x, y, n = 0;
+	bool open = false;
+
+	for (y = 0; y < term.row; ++y) {
+		uint8_t *f = &term.flags[y * term.col];
+		int x0 = -1, x1 = -1;
+
+		for (x = 0; x < term.col; ++x) {
+			if (!(f[x] & CELL_DAMAGE))
+				continue;
+			if (x0 < 0)
+				x0 = x;
+			x1 = x;
+		}
+
+		if (x0 < 0) {
+			open = false;
+			continue;
+		}
+
+		if (open && x0 <= r[n - 1].x1 && x1 >= r[n - 1].x0) {
+			if (x0 < r[n - 1].x0)
+				r[n - 1].x0 = x0;
+			if (x1 > r[n - 1].x1)
+				r[n - 1].x1 = x1;
+			r[n - 1].y1 = y;
+		} else {
+			if (n == MAX_RECTS)
+				return -1;
+			r[n++] = (struct rect){ x0, x1, y, y };
+		}
+		open = true;
+	}
+
+	return n;
+}
+
+/* Tell the compositor what differs from the frame it shows, and nothing more.
+ * Many small rectangles cost requests, and a box that is mostly changed
+ * anyway is no cheaper than the whole surface. */
+static void send_damage(bool full)
+{
+	struct rect r[MAX_RECTS];
+	int i, n = 0, area = 0;
+
+	if (!full) {
+		n = damage_rects(r);
+		if (n < 0) {
+			int x0 = term.col, x1 = -1, y0 = term.row, y1 = -1;
+			int x, y;
+
+			for (y = 0; y < term.row; ++y) {
+				for (x = 0; x < term.col; ++x) {
+					if (!(term.flags[y * term.col + x] &
+					      CELL_DAMAGE))
+						continue;
+					x0 = x < x0 ? x : x0;
+					x1 = x > x1 ? x : x1;
+					y0 = y < y0 ? y : y0;
+					y1 = y > y1 ? y : y1;
+				}
+			}
+			r[0] = (struct rect){ x0, x1, y0, y1 };
+			n = 1;
+		}
+		for (i = 0; i < n; ++i)
+			area += (r[i].x1 - r[i].x0 + 1) *
+				(r[i].y1 - r[i].y0 + 1);
+		if (area * 4 > term.col * term.row * 3)
+			full = true;
+	}
+
+	if (full) {
+		wl_surface_damage_buffer(term.surf, 0, 0, term.width,
+					 term.height);
+		return;
+	}
+
+	for (i = 0; i < n; ++i) {
+		int x = term.margin.left + r[i].x0 * term.cwidth;
+		int y = term.margin.top + r[i].y0 * term.cheight;
+		int x2 = x + (r[i].x1 - r[i].x0 + 1) * term.cwidth;
+		int y2 = y + (r[i].y1 - r[i].y0 + 1) * term.cheight;
+
+		/* A viewport maps the buffer to the surface with rounding, so
+		 * a compositor may take a pixel at the edge for part of its
+		 * neighbour and leave a seam. */
+		if (term.scale != 120) {
+			x = x > 0 ? x - 1 : 0;
+			y = y > 0 ? y - 1 : 0;
+			x2 = x2 < term.width ? x2 + 1 : term.width;
+			y2 = y2 < term.height ? y2 + 1 : term.height;
+		}
+		wl_surface_damage_buffer(term.surf, x, y, x2 - x, y2 - y);
+	}
+}
+
 static void redraw(void)
 {
-	struct buffer *buffer = swap_buffers();
+	struct buffer *buffer;
+	int i, x, y, n = term.col * term.row;
+	bool margins = term.cfg.margin || term.cfg.padding;
+	uint32_t mc = margins ? margin_colour() : 0;
+	bool full;
+
+	tsm_screen_draw(term.screen, collect_cell, NULL);
+
+	/* What the compositor shows is only known to be what we last
+	 * committed. Without that, or when the margins change, it all goes. */
+	full = term.full_redraw || !term.shown_valid || mc != term.shown_margin;
+	for (i = 0; i < n; ++i)
+		term.flags[i] = full || memcmp(&term.cur[i], &term.shown[i],
+					       sizeof(*term.cur))
+				? CELL_DAMAGE : 0;
+	if (!full) {
+		for (i = 0; i < n && !term.flags[i]; ++i)
+			;
+		if (i == n) {
+			/* nothing to show, so no commit that would only cost
+			 * the compositor a frame */
+			term.need_redraw = false;
+			return;
+		}
+		spread_wide(CELL_DAMAGE, term.shown);
+	}
+
+	buffer = swap_buffers();
 
 	if (buffer == NULL) {
 		fprintf(stderr, "no buffer available, cannot redraw\n");
 		return;
 	}
 
+	if (term.full_redraw) {
+		/* so that nothing left in the buffer can hide a cell that was
+		 * not painted */
+		memset(buffer->data, 0, buffer->size);
+		buffer->valid = false;
+	}
+
+	for (i = 0; i < n; ++i)
+		term.flags[i] &= ~CELL_PAINT;
+	for (i = 0; i < n; ++i)
+		if (!buffer->valid || memcmp(&term.cur[i], &buffer->shadow[i],
+					     sizeof(*term.cur)))
+			term.flags[i] |= CELL_PAINT;
+	if (buffer->valid)
+		spread_wide(CELL_PAINT, buffer->shadow);
+
 	wl_surface_attach(term.surf, buffer->b, 0, 0);
-	if ((term.cfg.margin || term.cfg.padding) && buffer->age == 0)
-		draw_margin(buffer);
-	buffer->age = tsm_screen_draw(term.screen, draw_cell, buffer);
-	if (buffer->age == 0)
-		term.buf[0].age = term.buf[1].age = 0;
-	wl_surface_damage_buffer(term.surf, 0, 0, term.width, term.height);
+	if (margins && (!buffer->valid || buffer->margin != mc))
+		draw_margin(buffer, mc);
+	for (y = 0; y < term.row; ++y)
+		for (x = 0; x < term.col; ++x)
+			if (term.flags[y * term.col + x] & CELL_PAINT)
+				paint_cell(buffer, x, y);
+	memcpy(buffer->shadow, term.cur, n * sizeof(*term.cur));
+	buffer->margin = mc;
+	buffer->valid = true;
+
+	send_damage(full);
+	memcpy(term.shown, term.cur, n * sizeof(*term.cur));
+	term.shown_margin = mc;
+	term.shown_valid = true;
 
 	term.cb = wl_surface_frame(term.surf);
 	wl_callback_add_listener(term.cb, &frame_listener, NULL);
@@ -1576,6 +1837,7 @@ static void do_configure(void)
 	int padding_x, padding_y;
 	int col, row;
 	int padding = (term.cfg.padding * term.scale + 60) / 120;
+	int logicalwidth, logicalheight;
 
 	if (term.confwidth)
 		scaledwidth = (term.confwidth * term.scale + 60) / 120;
@@ -1607,31 +1869,42 @@ static void do_configure(void)
 		term.margin.left = (newwidth - col * term.cwidth) / 2;
 		term.margin.top = (newheight - row * term.cheight) / 2;
 
+		logicalwidth = term.confwidth ? term.confwidth
+					      : destination(newwidth);
+		logicalheight = term.confheight ? term.confheight
+						: destination(newheight);
 		if (term.vp && term.fs)
-			wp_viewport_set_destination(term.vp,
-						    term.confwidth
-						    ? term.confwidth
-						    : destination(newwidth),
-						    term.confheight
-						    ? term.confheight
-						    : destination(newheight));
+			wp_viewport_set_destination(term.vp, logicalwidth,
+						    logicalheight);
 	} else {
 		newwidth = col * term.cwidth + 2 * padding_x;
 		newheight = row * term.cheight + 2 * padding_y;
 		term.margin.left = padding_x;
 		term.margin.top = padding_y;
 
+		logicalwidth = destination(newwidth);
+		logicalheight = destination(newheight);
 		if (term.vp && term.fs)
-			wp_viewport_set_destination(term.vp,
-						    destination(newwidth),
-						    destination(newheight));
+			wp_viewport_set_destination(term.vp, logicalwidth,
+						    logicalheight);
+	}
+
+	/* Every pixel is opaque only when the opacity says so, and then the
+	 * compositor need not blend or even look at what is below. The region
+	 * is in surface coordinates, like the viewport destination. */
+	if (term.cfg.opacity == 255) {
+		struct wl_region *region = wl_compositor_create_region(term.cp);
+
+		wl_region_add(region, 0, 0, logicalwidth, logicalheight);
+		wl_surface_set_opaque_region(term.surf, region);
+		wl_region_destroy(region);
 	}
 
 	if (term.width != newwidth || term.height != newheight) {
 		term.width = newwidth;
 		term.height = newheight;
 
-		term.resize = 2;
+		term.shown_valid = false;
 		term.need_redraw = true;
 	}
 
@@ -1643,6 +1916,18 @@ static void do_configure(void)
 		term.col = col;
 		term.row = row;
 		tsm_screen_resize(term.screen, col, row);
+
+		free(term.cur);
+		free(term.shown);
+		free(term.cur_ch);
+		free(term.flags);
+		term.cur = calloc(col * row, sizeof(*term.cur));
+		term.shown = calloc(col * row, sizeof(*term.shown));
+		term.cur_ch = calloc(col * row, sizeof(*term.cur_ch));
+		term.flags = calloc(col * row, sizeof(*term.flags));
+		if (!term.cur || !term.shown || !term.cur_ch || !term.flags)
+			abort();
+		term.shown_valid = false;
 
 		if (term.master_fd >= 0) {
 			if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
@@ -1659,7 +1944,9 @@ static void rescale_font(void)
 
 	if (term.configured) {
 		do_configure();
-		term.buf[0].age = term.buf[1].age = 0;
+		/* the glyphs are new, and the cell keys do not say so */
+		term.buf[0].valid = term.buf[1].valid = false;
+		term.shown_valid = false;
 		term.need_redraw = true;
 	}
 }
@@ -2192,6 +2479,9 @@ retry:
 		}
 	}
 	read_config();
+	/* for tests: paint everything into a cleared buffer and damage it all
+	 * on every redraw, which is what the incremental result must equal */
+	term.full_redraw = getenv("HAVOC_FULL_REDRAW") != NULL;
 	setup_pty(argv);
 
 #define fail(e, s) { fprintf(stderr, s "\n"); goto e; }
@@ -2328,6 +2618,10 @@ retry:
 
 	buffer_unmap(&term.buf[0]);
 	buffer_unmap(&term.buf[1]);
+	free(term.cur);
+	free(term.shown);
+	free(term.cur_ch);
+	free(term.flags);
 	if (term.cb)
 		wl_callback_destroy(term.cb);
 
