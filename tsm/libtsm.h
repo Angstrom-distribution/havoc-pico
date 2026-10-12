@@ -150,6 +150,12 @@ int tsm_screen_get_height(struct tsm_screen *con);
 int tsm_screen_resize(struct tsm_screen *con, int x, int y);
 int tsm_screen_set_margins(struct tsm_screen *con, int top, int bottom);
 void tsm_screen_set_max_sb(struct tsm_screen *con, int max);
+
+/* The terminal draws the code points this returns true for as pictures two
+ * cells wide, whatever wcwidth says, so the screen must give them two cells.
+ * NULL (the default) leaves every width to wcwidth. */
+typedef bool (*tsm_picture_cb) (uint32_t ucs4);
+void tsm_screen_set_picture_cb(struct tsm_screen *con, tsm_picture_cb cb);
 void tsm_screen_clear_sb(struct tsm_screen *con);
 
 void tsm_screen_sb_up(struct tsm_screen *con, int num);

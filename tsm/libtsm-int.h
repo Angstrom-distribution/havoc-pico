@@ -142,6 +142,9 @@ struct tsm_screen {
 	int cursor_x;			/* current cursor x-pos */
 	int cursor_y;			/* current cursor y-pos */
 
+	/* code points drawn as two-cell pictures, or NULL */
+	tsm_picture_cb picture_cb;
+
 	/* color palette */
 	uint8_t palette[256][3];
 	uint8_t foreground[3];

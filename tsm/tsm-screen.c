@@ -1050,6 +1050,7 @@ void tsm_screen_write(struct tsm_screen *con, tsm_symbol_t ch,
 {
 	int last;
 	int len;
+	bool picture = false;
 
 	len = tsm_symbol_get_width(con->sym_table, ch);
 	if (!len) {
@@ -1057,6 +1058,14 @@ void tsm_screen_write(struct tsm_screen *con, tsm_symbol_t ch,
 	} else if (len < 0) {
 		ch = 0x0000fffd;
 		len = 1;
+	} else if (con->picture_cb && con->size_x > 1) {
+		size_t n;
+		const uint32_t *ucs4 = tsm_symbol_get(con->sym_table, &ch, &n);
+
+		if (n && con->picture_cb(ucs4[0])) {
+			picture = true;
+			len = 2;
+		}
 	}
 
 	screen_inc_age(con);
@@ -1074,13 +1083,35 @@ void tsm_screen_write(struct tsm_screen *con, tsm_symbol_t ch,
 			move_cursor(con, con->size_x - 1, con->cursor_y);
 	}
 
+	/* Half a picture says nothing, so it goes whole onto the next line,
+	 * as xterm does with a wide character, or without auto-wrap into the
+	 * last two cells. */
+	if (picture && con->cursor_x == con->size_x - 1) {
+		if (con->flags & TSM_SCREEN_AUTO_WRAP)
+			move_cursor(con, 0, con->cursor_y + 1);
+		else
+			move_cursor(con, con->size_x - 2, con->cursor_y);
+	}
+
 	if (con->cursor_y > last) {
 		move_cursor(con, con->cursor_x, last);
 		screen_scroll_up(con, 1);
 	}
 
 	screen_write(con, con->cursor_x, con->cursor_y, ch, len, attr);
+	/* The second cell of a picture is drawn with its own background
+	 * (cursor, selection), so it must not keep the attributes of what it
+	 * held before. */
+	if (picture && con->cursor_x + 1 < con->size_x)
+		memcpy(&con->lines[con->cursor_y]->cells[con->cursor_x + 1].attr,
+		       attr, sizeof(*attr));
 	move_cursor(con, con->cursor_x + len, con->cursor_y);
+}
+
+SHL_EXPORT
+void tsm_screen_set_picture_cb(struct tsm_screen *con, tsm_picture_cb cb)
+{
+	con->picture_cb = cb;
 }
 
 SHL_EXPORT

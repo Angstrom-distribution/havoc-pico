@@ -7,7 +7,8 @@ PKG_CONFIG ?= pkg-config
 WAYLAND_SCANNER ?= wayland-scanner
 
 CFLAGS ?= -g -O2
-CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700
+EMOJI_DIR ?= /usr/share/wvkbd/emoji
+CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"'
 
 WAYLAND_PROTOCOLS_DIR != $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols
 
@@ -42,6 +43,7 @@ GEN = \
 OBJ = \
 	main.o \
 	glyph.o \
+	emoji.o \
 	xdg-shell.o \
 	xdg-decoration-unstable-v1.o \
 	primary-selection-unstable-v1.o \

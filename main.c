@@ -27,6 +27,7 @@
 #include "fractional-scale-v1.h"
 #include "viewporter.h"
 #include "text-input-unstable-v3.h"
+#include "emoji.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -57,7 +58,10 @@ struct cell_key {
 	uint32_t id;
 	uint32_t fg, bg;
 	uint8_t width;
-	uint8_t pad[3];
+	/* drawn from an emoji pack: whether it is depends on the pack and the
+	 * cell size, not only on the character */
+	uint8_t picture;
+	uint8_t pad[2];
 };
 
 enum {
@@ -756,6 +760,11 @@ static void print(uint32_t *dst, int w, int vis,
 	}
 }
 
+static bool picture_cb(uint32_t ucs4)
+{
+	return emoji_wide(ucs4, term.cwidth, term.cheight);
+}
+
 static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 			 const uint32_t *ch, size_t len, int char_width,
 			 int x, int y, const struct tsm_screen_attr *a,
@@ -772,9 +781,13 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 	 * of them apart; the second half of a wide cell is blank for the
 	 * same reason, whatever character it was left holding */
 	if (len && char_width) {
+		unsigned px;
+
 		k->id = id;
 		k->fg = join(0, a->fr ^ inv, a->fg ^ inv, a->fb ^ inv);
 		term.cur_ch[i] = ch[0];
+		k->picture = char_width == 2 &&
+			     emoji_image(ch[0], term.cwidth, term.cheight, &px);
 	}
 }
 
@@ -799,6 +812,26 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
+
+	if (k->picture) {
+		const uint8_t *rec;
+		unsigned px;
+
+		/* half a picture says nothing: its second half was written
+		 * over, or the right edge cut it off (a narrower window,
+		 * characters inserted before it) */
+		if (x + 1 >= term.col || k[1].width != 0) {
+			blank(dst, 1, br, bg, bb, term.cfg.opacity);
+			return;
+		}
+		rec = emoji_image(term.cur_ch[i], term.cwidth, term.cheight,
+				  &px);
+		if (rec) {
+			emoji_paint(dst, term.width, term.cwidth, term.cheight,
+				    k->bg, k[1].bg, term.cfg.opacity, rec, px);
+			return;
+		}
+	}
 
 	if (k->id == 0) {
 		blank(dst, vis, br, bg, bb, term.cfg.opacity);
@@ -858,7 +891,9 @@ static const struct wl_callback_listener frame_listener = {
 
 /* Spread a flag over the cells that share pixels with a flagged wide cell, the
  * same way before and after the change (old is what the flag is relative to):
- * painting either half of a wide cell touches both. */
+ * painting either half of a wide cell touches both. A picture is also drawn
+ * differently when the cell after it changes (its background, or a character
+ * written over its second half). */
 static void spread_wide(uint8_t bit, const struct cell_key *old)
 {
 	int x, y;
@@ -869,7 +904,9 @@ static void spread_wide(uint8_t bit, const struct cell_key *old)
 		uint8_t *f = &term.flags[y * term.col];
 
 		for (x = term.col - 1; x > 0; --x)
-			if ((f[x] & bit) && c[x].width == 0)
+			if ((f[x] & bit) && (c[x].width == 0 ||
+					      c[x - 1].picture ||
+					      o[x - 1].picture))
 				f[x - 1] |= bit;
 		for (x = 0; x < term.col - 1; ++x)
 			if ((f[x] & bit) &&
@@ -2435,6 +2472,8 @@ static void usage(void)
 	       "  -l         Keep window open after the child process exits.\n"
 	       "  -s <name>  Wayland display server to connect to.\n"
 	       "  -i <id>    Wayland app ID to use instead of \"havoc\".\n"
+	       "  -E <dir>   Directory of the emoji packs"
+			     " (default " EMOJI_DIR ").\n"
 	       "  -v         Show version information.\n"
 	       "  -h         Show this help.\n");
 }
@@ -2463,6 +2502,9 @@ retry:
 			break;
 		case 'i':
 			term.opt.app_id = take("wayland app id");
+			break;
+		case 'E':
+			emoji_set_dir(take("emoji pack directory"));
 			break;
 		case 'v':
 			printf("havoc " VERSION "\n");
@@ -2518,6 +2560,7 @@ retry:
 	if (tsm_screen_new(&term.screen) < 0)
 		fail(etsm, "failed to create tsm screen");
 	tsm_screen_set_max_sb(term.screen, term.cfg.scrollback);
+	tsm_screen_set_picture_cb(term.screen, picture_cb);
 
 	if (tsm_vte_new(&term.vte, term.screen, wcb, NULL) < 0)
 		fail(evte, "failed to create tsm vte");
