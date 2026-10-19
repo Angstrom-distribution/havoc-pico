@@ -28,6 +28,7 @@
 #include "viewporter.h"
 #include "text-input-unstable-v3.h"
 #include "emoji.h"
+#include "pixfont.h"
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -233,6 +234,7 @@ static struct {
 		enum deco decorations;
 		int font_size;
 		char font_path[512];
+		char font_pixel[16];
 	} cfg;
 } term = {
 	.scale = 120,
@@ -248,6 +250,7 @@ static struct {
 	.cfg.decorations = DECO_AUTO,
 	.cfg.font_size = 18,
 	.cfg.font_path = "",
+	.cfg.font_pixel = "",
 	.opt.app_id = "havoc"
 };
 
@@ -760,6 +763,35 @@ static void print(uint32_t *dst, int w, int vis,
 	}
 }
 
+/* A cell of a bitmap font: the foreground where a bit of the glyph is set and
+ * the background where it is not, so a cell holds those two colours and no
+ * blend. A pixel of the font is a k x k block of pixels. */
+static void print1(uint32_t *dst, int vis, int k,
+		   u8 br, u8 bg, u8 bb,
+		   u8 fr, u8 fg, u8 fb,
+		   u8 ba, const uint8_t *rows, int bpr)
+{
+	uint32_t bgc = join(ba, mul(br, ba), mul(bg, ba), mul(bb, ba));
+	uint32_t fgc = join(0xff, fr, fg, fb);
+	int h = term.cheight;
+	int y, x;
+
+	vis *= term.cwidth;
+	for (y = 0; y < h; ++y) {
+		const uint8_t *r = rows + (y / k) * bpr;
+
+		if (k == 1) {
+			for (x = 0; x < vis; ++x)
+				dst[x] = r[x >> 3] & 0x80 >> (x & 7) ? fgc : bgc;
+		} else {
+			for (x = 0; x < vis; ++x)
+				dst[x] = r[x / k >> 3] & 0x80 >> (x / k & 7) ?
+					 fgc : bgc;
+		}
+		dst += term.width;
+	}
+}
+
 static bool picture_cb(uint32_t ucs4)
 {
 	return emoji_wide(ucs4, term.cwidth, term.cheight);
@@ -835,6 +867,13 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 
 	if (k->id == 0) {
 		blank(dst, vis, br, bg, bb, term.cfg.opacity);
+	} else if (pixfont_active()) {
+		int bpr;
+		const uint8_t *g = pixfont_glyph(term.cur_ch[i], w, &bpr);
+
+		print1(dst, vis, pixfont_multiple(),
+		       br, bg, bb, k->fg >> 16, k->fg >> 8, k->fg,
+		       term.cfg.opacity, g, bpr);
 	} else {
 		/* todo, combining marks */
 		unsigned char *g = get_glyph(k->id, term.cur_ch[i], w);
@@ -2279,6 +2318,9 @@ static void font_config(char *key, char *val)
 	else if (strcmp(key, "path") == 0)
 		strncpy(term.cfg.font_path, val,
 			sizeof(term.cfg.font_path) - 1);
+	else if (strcmp(key, "pixel") == 0)
+		strncpy(term.cfg.font_pixel, strcmp(val, "no") == 0 ? "" : val,
+			sizeof(term.cfg.font_pixel) - 1);
 }
 
 static void bind_config(char *key, char *val)
@@ -2528,6 +2570,10 @@ retry:
 
 #define fail(e, s) { fprintf(stderr, s "\n"); goto e; }
 
+	if (term.cfg.font_pixel[0] &&
+	    pixfont_select(term.cfg.font_pixel) < 0)
+		fprintf(stderr, "no bitmap font '%s', using the outline font\n",
+			term.cfg.font_pixel);
 	if (font_init(term.cfg.font_path) < 0)
 		fail(efont, "could not load font");
 	font_scale(term.cfg.font_size, &term.cwidth, &term.cheight);

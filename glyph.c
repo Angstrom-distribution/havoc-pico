@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "fallback.h"
+#include "pixfont.h"
 
 #ifdef DEBUG_GLYPH
 #include <assert.h>
@@ -1556,6 +1557,10 @@ static void close_font(void)
 
 int font_init(char *path)
 {
+	/* a bitmap font needs no outline font, so none is opened */
+	if (pixfont_active())
+		return 0;
+
 	open_font(path);
 
 	if (setup(&font, 0) < 0) {
@@ -1572,6 +1577,11 @@ int font_init(char *path)
 void font_scale(int size, int *w, int *h)
 {
 	int descent, linegap;
+
+	if (pixfont_active()) {
+		pixfont_scale(size, w, h);
+		return;
+	}
 
 	delete_cache(font.cache);
 	font.cache = &leaf;
@@ -1594,6 +1604,9 @@ void font_scale(int size, int *w, int *h)
 
 void font_deinit(void)
 {
+	if (pixfont_active())
+		return;
+
 	delete_cache(font.cache);
 	close_font();
 }

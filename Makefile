@@ -8,6 +8,8 @@ WAYLAND_SCANNER ?= wayland-scanner
 
 CFLAGS ?= -g -O2
 EMOJI_DIR ?= /usr/share/wvkbd/emoji
+# pixfont-none.o leaves the bitmap fonts (about 120 KB of data) out
+PIXFONT_OBJ ?= pixfont-data.o
 CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"'
 
 WAYLAND_PROTOCOLS_DIR != $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols
@@ -44,6 +46,8 @@ OBJ = \
 	main.o \
 	glyph.o \
 	emoji.o \
+	pixfont.o \
+	$(PIXFONT_OBJ) \
 	xdg-shell.o \
 	xdg-decoration-unstable-v1.o \
 	primary-selection-unstable-v1.o \
