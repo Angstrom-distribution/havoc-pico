@@ -29,6 +29,13 @@
 #include "text-input-unstable-v3.h"
 #include "emoji.h"
 #include "pixfont.h"
+#include "c8.h"
+#ifdef HAVE_PICOWL_PALETTE
+#include "picowl-palette-v1.h"
+#else
+struct picowl_palette_manager_v1;
+struct picowl_surface_palette_v1;
+#endif
 
 #define ARRAY_LENGTH(a) (sizeof (a) / sizeof (a)[0])
 
@@ -83,6 +90,7 @@ static struct {
 	struct wl_compositor *cp;
 	struct wl_shm *shm;
 	bool shm_argb;
+	bool shm_c8;
 	struct xdg_wm_base *wm_base;
 	struct wl_seat *seat;
 	struct zwp_text_input_manager_v3 *tim;
@@ -100,6 +108,10 @@ static struct {
 		struct wl_buffer *b;
 		void *data;
 		int size;
+		/* 8 bit indices (C8) instead of 32 bit pixels, and the bytes
+		 * from one row to the next */
+		bool c8;
+		int stride;
 		int w, h, cols, rows;
 		bool busy;
 		/* whether shadow holds what is painted in data */
@@ -108,6 +120,15 @@ static struct {
 		uint32_t margin;
 	} buf[2];
 	struct wl_callback *cb;
+
+	/* C8 windows (patch 0005): the palette protocol, whether the
+	 * compositor shows the window alone on a C8 output, whether the
+	 * buffers are C8 now, and the colours in them. */
+	struct picowl_palette_manager_v1 *palm;
+	struct picowl_surface_palette_v1 *pal;
+	bool exclusive;
+	bool c8_on;
+	struct c8_table colours;
 
 	/* The cells as of the redraw being made, and as of the last committed
 	 * frame (what the compositor shows), sized col * row. */
@@ -231,6 +252,7 @@ static struct {
 		bool margin;
 		int padding;
 		unsigned char opacity;
+		bool c8;
 		enum deco decorations;
 		int font_size;
 		char font_path[512];
@@ -604,7 +626,10 @@ static int buffer_init(struct buffer *buf)
 
 	assert(!buf->busy);
 
-	stride = term.width * 4;
+	buf->c8 = term.c8_on;
+	/* a row of indices is a multiple of 4 bytes, like a row of pixels */
+	stride = buf->c8 ? (term.width + 3) & ~3 : term.width * 4;
+	buf->stride = stride;
 	buf->size = stride * term.height;
 
 	srand(time(NULL));
@@ -638,6 +663,7 @@ static int buffer_init(struct buffer *buf)
 	/* Nothing is blended onto an opaque window, so say so */
 	buf->b = wl_shm_pool_create_buffer(pool, 0, term.width, term.height,
 					   stride,
+					   buf->c8 ? WL_SHM_FORMAT_C8 :
 					   term.cfg.opacity == 255
 					   ? WL_SHM_FORMAT_XRGB8888
 					   : WL_SHM_FORMAT_ARGB8888);
@@ -684,7 +710,8 @@ static struct buffer *swap_buffers(void)
 	/* Each buffer is checked on its own: a buffer that was busy while the
 	 * window was resized keeps its old size, and one that was never used
 	 * has no memory yet. */
-	if (!buf->b || buf->w != term.width || buf->h != term.height) {
+	if (!buf->b || buf->w != term.width || buf->h != term.height ||
+	    buf->c8 != term.c8_on) {
 		buffer_unmap(buf);
 		if (buffer_init(buf) < 0)
 			abort();
@@ -823,6 +850,103 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 	}
 }
 
+/* The same cells into a C8 buffer: an index for each colour, found in the
+ * table of colours in use (c8.h). Only the bitmap font is drawn this way: a
+ * cell holds two colours and no blend. */
+static void blank8(uint8_t *dst, int stride, int w, uint8_t c)
+{
+	int h = term.cheight;
+
+	w *= term.cwidth;
+	while (h--) {
+		memset(dst, c, w);
+		dst += stride;
+	}
+}
+
+static void print18(uint8_t *dst, int stride, int vis, int k, uint8_t bgi,
+		    uint8_t fgi, const uint8_t *rows, int bpr)
+{
+	int h = term.cheight;
+	int y, x;
+
+	vis *= term.cwidth;
+	for (y = 0; y < h; ++y) {
+		const uint8_t *r = rows + (y / k) * bpr;
+
+		for (x = 0; x < vis; ++x)
+			dst[x] = r[x / k >> 3] & 0x80 >> (x / k & 7) ? fgi : bgi;
+		dst += stride;
+	}
+}
+
+/* A picture is blended in colours of its own: a colour the table has is
+ * used, any other is the nearest of the cube, so pictures never take a slot
+ * from the text. */
+static void picture8(uint8_t *dst, int stride, const uint8_t *rec,
+		     unsigned px, uint32_t bgl, uint32_t bgr)
+{
+	static uint32_t *tmp;
+	static size_t tmplen;
+	int w = 2 * term.cwidth, h = term.cheight;
+	int x, y;
+
+	if (tmplen < (size_t)w * h) {
+		free(tmp);
+		tmplen = (size_t)w * h;
+		tmp = malloc(tmplen * sizeof(*tmp));
+		if (tmp == NULL)
+			abort();
+	}
+	emoji_paint(tmp, w, term.cwidth, term.cheight, bgl, bgr,
+		    term.cfg.opacity, rec, px);
+	for (y = 0; y < h; ++y)
+		for (x = 0; x < w; ++x)
+			dst[y * stride + x] = c8_find(&term.colours,
+						      tmp[y * w + x] & 0xffffff);
+}
+
+static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
+{
+	int i = y * term.col + x;
+	const struct cell_key *k = &term.cur[i];
+	uint8_t *dst = buffer->data;
+	int stride = buffer->stride;
+	uint8_t bgi = c8_get(&term.colours, k->bg);
+
+	dst += term.margin.top * stride + term.margin.left;
+	dst = &dst[y * term.cheight * stride + x * term.cwidth];
+
+	if (k->picture) {
+		const uint8_t *rec;
+		unsigned px;
+
+		if (x + 1 >= term.col || k[1].width != 0) {
+			blank8(dst, stride, 1, bgi);
+			return;
+		}
+		rec = emoji_image(term.cur_ch[i], term.cwidth, term.cheight,
+				  &px);
+		if (rec) {
+			/* the second half's colour is looked up too, so that
+			 * a plain background there has its slot */
+			c8_get(&term.colours, k[1].bg);
+			picture8(dst, stride, rec, px, k->bg, k[1].bg);
+			return;
+		}
+	}
+
+	if (k->id == 0) {
+		blank8(dst, stride, vis, bgi);
+	} else {
+		int bpr;
+		const uint8_t *g = pixfont_glyph(term.cur_ch[i], w, &bpr);
+
+		print18(dst, stride, vis, pixfont_multiple(), bgi,
+			c8_get(&term.colours, k->fg), g, bpr);
+	}
+}
+
 static void paint_cell(struct buffer *buffer, int x, int y)
 {
 	int i = y * term.col + x;
@@ -841,6 +965,11 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 		w = 1;
 	}
 	vis = x + w > term.col ? term.col - x : w;
+
+	if (buffer->c8) {
+		paint_cell8(buffer, x, y, w, vis);
+		return;
+	}
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
@@ -892,12 +1021,37 @@ static uint32_t margin_colour(void)
 	return join(a, mul(rgb[0], a), mul(rgb[1], a), mul(rgb[2], a));
 }
 
+static void draw_margin8(struct buffer *buffer, uint32_t c)
+{
+	uint8_t *dst = buffer->data;
+	uint8_t i8 = c8_get(&term.colours, c);
+	int s = buffer->stride;
+	int inw = term.col * term.cwidth;
+	int inh = term.row * term.cheight;
+	int y;
+
+	for (y = 0; y < term.height; ++y) {
+		if (y < term.margin.top || y >= term.margin.top + inh) {
+			memset(dst + y * s, i8, term.width);
+		} else {
+			memset(dst + y * s, i8, term.margin.left);
+			memset(dst + y * s + term.margin.left + inw, i8,
+			       term.width - term.margin.left - inw);
+		}
+	}
+}
+
 static void draw_margin(struct buffer *buffer, uint32_t c)
 {
 	uint32_t *dst = buffer->data;
 	int inw = term.col * term.cwidth;
 	int inh = term.row * term.cheight;
 	int i, j;
+
+	if (buffer->c8) {
+		draw_margin8(buffer, c);
+		return;
+	}
 
 	for (i = 0; i < term.width * term.margin.top; ++i)
 		dst[i] = c;
@@ -1062,6 +1216,49 @@ static void send_damage(bool full)
 	}
 }
 
+/* Whether the window is drawn in C8 now (patch 0005): the user asked for it,
+ * the compositor has the palette protocol and the C8 shm format and says that
+ * this window alone is on a C8 output, nothing is blended (opacity 255) and
+ * the text comes from a bitmap font. Anything else is XRGB8888 as before. */
+static bool c8_wanted(void)
+{
+	return term.cfg.c8 && term.palm && term.pal && term.shm_c8 &&
+	       term.exclusive && term.cfg.opacity == 255 && pixfont_active();
+}
+
+/* Called at the start of a redraw. A change of format, or colours that did
+ * not fit, start from nothing: the colours are chosen again and both
+ * buffers and the compositor's picture count as unknown. */
+static void c8_update(void)
+{
+	bool want = c8_wanted();
+
+	if (want != term.c8_on || (want && term.colours.full)) {
+		term.c8_on = want;
+		c8_reset(&term.colours);
+		term.buf[0].valid = false;
+		term.buf[1].valid = false;
+		term.shown_valid = false;
+	}
+}
+
+/* The palette goes with the commit that first needs it. */
+static void c8_send_palette(void)
+{
+#ifdef HAVE_PICOWL_PALETTE
+	uint32_t pal[256];
+	struct wl_array a;
+
+	if (!term.c8_on || !term.colours.dirty)
+		return;
+	c8_palette(&term.colours, pal);
+	a.size = a.alloc = sizeof(pal);
+	a.data = pal;
+	picowl_surface_palette_v1_set_palette(term.pal, &a);
+#endif
+	term.colours.dirty = false;
+}
+
 static void redraw(void)
 {
 	struct buffer *buffer;
@@ -1070,6 +1267,7 @@ static void redraw(void)
 	uint32_t mc = margins ? margin_colour() : 0;
 	bool full;
 
+	c8_update();
 	tsm_screen_draw(term.screen, collect_cell, NULL);
 
 	/* What the compositor shows is only known to be what we last
@@ -1125,6 +1323,7 @@ static void redraw(void)
 	buffer->margin = mc;
 	buffer->valid = true;
 
+	c8_send_palette();
 	send_damage(full);
 	memcpy(term.shown, term.cur, n * sizeof(*term.cur));
 	term.shown_margin = mc;
@@ -2094,11 +2293,48 @@ static void shm_format(void *data, struct wl_shm *shm, uint32_t format)
 {
 	if (format == WL_SHM_FORMAT_ARGB8888)
 		term.shm_argb = true;
+	else if (format == WL_SHM_FORMAT_C8)
+		term.shm_c8 = true;
 }
 
 static const struct wl_shm_listener shm_listener = {
 	.format = shm_format,
 };
+
+#ifdef HAVE_PICOWL_PALETTE
+static void palm_converter_palette(void *data,
+				   struct picowl_palette_manager_v1 *m,
+				   struct wl_array *entries)
+{
+}
+
+static void palm_output_format(void *data,
+			       struct picowl_palette_manager_v1 *m,
+			       struct wl_output *output, uint32_t format)
+{
+}
+
+static const struct picowl_palette_manager_v1_listener palm_listener = {
+	.converter_palette = palm_converter_palette,
+	.output_format = palm_output_format,
+};
+
+static void pal_presentation(void *data,
+			     struct picowl_surface_palette_v1 *p,
+			     uint32_t mode)
+{
+	bool exclusive = mode == PICOWL_SURFACE_PALETTE_V1_MODE_EXCLUSIVE;
+
+	if (exclusive != term.exclusive) {
+		term.exclusive = exclusive;
+		term.need_redraw = true;
+	}
+}
+
+static const struct picowl_surface_palette_v1_listener pal_listener = {
+	.presentation = pal_presentation,
+};
+#endif
 
 static void registry_get(void *data, struct wl_registry *r, uint32_t id,
 			 const char *i, uint32_t version)
@@ -2108,6 +2344,15 @@ static void registry_get(void *data, struct wl_registry *r, uint32_t id,
 	} else if (strcmp(i, "wl_shm") == 0) {
 		term.shm = wl_registry_bind(r, id, &wl_shm_interface, 1);
 		wl_shm_add_listener(term.shm, &shm_listener, NULL);
+#ifdef HAVE_PICOWL_PALETTE
+	} else if (strcmp(i, "picowl_palette_manager_v1") == 0) {
+		if (term.cfg.c8) {
+			term.palm = wl_registry_bind(r, id,
+				&picowl_palette_manager_v1_interface, 1);
+			picowl_palette_manager_v1_add_listener(term.palm,
+				&palm_listener, NULL);
+		}
+#endif
 	} else if (strcmp(i, "xdg_wm_base") == 0) {
 		term.wm_base = wl_registry_bind(r, id, &xdg_wm_base_interface,
 						1);
@@ -2290,6 +2535,8 @@ static void window_config(char *key, char *val)
 {
 	if (strcmp(key, "opacity") == 0)
 		term.cfg.opacity = cfg_num(val, 10, 0, 255);
+	else if (strcmp(key, "c8") == 0)
+		term.cfg.c8 = strcmp(val, "yes") == 0;
 	else if (strcmp(key, "margin") == 0)
 		term.cfg.margin = strcmp(val, "yes") == 0;
 	else if (strcmp(key, "padding") == 0)
@@ -2614,6 +2861,16 @@ retry:
 	term.surf = wl_compositor_create_surface(term.cp);
 	if (term.surf == NULL)
 		fail(esurf, "could not create surface");
+#ifdef HAVE_PICOWL_PALETTE
+	/* the compositor says through it whether the window is alone on a C8
+	 * output, which decides the format of the buffers */
+	if (term.palm) {
+		term.pal = picowl_palette_manager_v1_get_surface_palette(
+			term.palm, term.surf);
+		picowl_surface_palette_v1_add_listener(term.pal,
+						       &pal_listener, NULL);
+	}
+#endif
 
 	term.xdgsurf = xdg_wm_base_get_xdg_surface(term.wm_base, term.surf);
 	if (term.xdgsurf == NULL)
@@ -2761,6 +3018,12 @@ eglobals:
 		wl_seat_destroy(term.seat);
 	if (term.wm_base)
 		xdg_wm_base_destroy(term.wm_base);
+#ifdef HAVE_PICOWL_PALETTE
+	if (term.pal)
+		picowl_surface_palette_v1_destroy(term.pal);
+	if (term.palm)
+		picowl_palette_manager_v1_destroy(term.palm);
+#endif
 	if (term.shm)
 		wl_shm_destroy(term.shm);
 	if (term.cp)

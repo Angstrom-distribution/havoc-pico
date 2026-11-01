@@ -10,7 +10,15 @@ CFLAGS ?= -g -O2
 EMOJI_DIR ?= /usr/share/wvkbd/emoji
 # pixfont-none.o leaves the bitmap fonts (about 120 KB of data) out
 PIXFONT_OBJ ?= pixfont-data.o
-CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"'
+# PICOWL_PALETTE_XML names picowl-palette-v1.xml, the protocol of picowl's C8
+# output (no file here: it comes with picowl). Without it havoc has no C8 path.
+PICOWL_PALETTE_XML ?=
+ifneq ($(PICOWL_PALETTE_XML),)
+PALETTE_GEN = picowl-palette-v1.h picowl-palette-v1.c
+PALETTE_OBJ = picowl-palette-v1.o
+PALETTE_DEFS = -DHAVE_PICOWL_PALETTE
+endif
+CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"' $(PALETTE_DEFS)
 
 WAYLAND_PROTOCOLS_DIR != $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols
 
@@ -40,13 +48,15 @@ GEN = \
 	fractional-scale-v1.h \
 	fractional-scale-v1.c \
 	text-input-unstable-v3.h \
-	text-input-unstable-v3.c
+	text-input-unstable-v3.c \
+	$(PALETTE_GEN)
 
 OBJ = \
 	main.o \
 	glyph.o \
 	emoji.o \
 	pixfont.o \
+	c8.o \
 	$(PIXFONT_OBJ) \
 	xdg-shell.o \
 	xdg-decoration-unstable-v1.o \
@@ -54,6 +64,7 @@ OBJ = \
 	viewporter.o \
 	fractional-scale-v1.o \
 	text-input-unstable-v3.o \
+	$(PALETTE_OBJ) \
 	tsm/wcwidth.o \
 	tsm/shl-htable.o \
 	tsm/tsm-render.o \
@@ -98,6 +109,9 @@ fractional-scale-v1.xml:
 text-input-unstable-v3.xml:
 	cp $(WAYLAND_PROTOCOLS_DIR)/unstable/text-input/$@ $@
 
+picowl-palette-v1.xml:
+	cp $(PICOWL_PALETTE_XML) $@
+
 install: havoc
 	mkdir -p $(DESTDIR)$(BINDIR)
 	install -m 755 havoc $(DESTDIR)$(BINDIR)/havoc
@@ -106,6 +120,6 @@ uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
 
 clean:
-	rm -f havoc $(XML) $(GEN) $(OBJ)
+	rm -f havoc $(XML) $(GEN) $(OBJ) picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
 
 .PHONY: install uninstall clean
