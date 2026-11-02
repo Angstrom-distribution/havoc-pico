@@ -7,6 +7,7 @@
 
 #include "base64.h"
 #include "kitty.h"
+#include "kitty-shm.h"
 
 #define CTRL_MAX	512
 #define NAME_MAX_LEN	255
@@ -471,6 +472,39 @@ static void begin_cmd(struct kitty *k)
 		k->discard = true;
 }
 
+/* t=s: the payload was the object's name; read the object into the sink.
+ * Every failure to use the object is the same reply. */
+static bool shm_load(struct kitty *k)
+{
+	const struct kitty_cmd *c = &k->cmd;
+	struct kitty_shm m;
+	size_t need = 1, take;
+	enum kitty_err err;
+
+	if (k->name_len > NAME_MAX_LEN) {
+		fail(k, KITTY_EBADF_SHM);
+		return false;
+	}
+	need = (size_t)c->s * c->v * (c->f == 32 ? 4 : 3);
+	if (kitty_shm_open(k->name, k->name_len, need, 4 * k->lim.max_pixels, &m) < 0) {
+		fail(k, KITTY_EBADF_SHM);
+		return false;
+	}
+	err = sink_start(k);
+	if (err) {
+		kitty_shm_close(&m);
+		fail(k, err);
+		return false;
+	}
+	take = need;
+	if (!sink_put(k, m.data, take)) {
+		kitty_shm_close(&m);
+		return false;
+	}
+	kitty_shm_close(&m);
+	return true;
+}
+
 /* the data of a finished transfer into the result */
 static void finish_data(struct kitty *k, struct kitty_image *img)
 {
@@ -488,10 +522,8 @@ static void finish_data(struct kitty *k, struct kitty_image *img)
 		name_put(k, tmp, f);
 	else if (f && !sink_put(k, tmp, f))
 		return;
-	if (k->by_name) {
-		fail(k, KITTY_EBADF_SHM);
+	if (k->by_name && !shm_load(k))
 		return;
-	}
 	if (!k->raw_on || !raw_finish(&k->raw, img))
 		fail(k, KITTY_ENODATA);
 }

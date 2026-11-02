@@ -67,7 +67,7 @@ static int feed_apc(struct kitty *k, const char *s, size_t len, int piece,
 	return n;
 }
 
-static const char *errname(enum kitty_err e)
+static __attribute__((unused)) const char *errname(enum kitty_err e)
 {
 	static const char *const n[] = { "OK", "EINVAL", "EBADF", "EBADF_SHM",
 		"ENOMEM", "ENODATA", "ENOENT" };
