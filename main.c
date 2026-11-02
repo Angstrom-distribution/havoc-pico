@@ -329,7 +329,12 @@ static void handle_tty(int ev)
 	int len = 0;
 
 	if (ev & POLLIN) {
+		/* a picture is many bytes; fewer reads, fewer wake-ups */
+#if HAVE_GRAPHICS
+		char data[4096];
+#else
 		char data[256];
+#endif
 
 		term.need_redraw = true;
 		len = read(term.master_fd, data, sizeof(data));
