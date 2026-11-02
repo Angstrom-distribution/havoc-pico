@@ -75,6 +75,8 @@ void tsm_utf8_mach_free(struct tsm_utf8_mach *mach);
 int tsm_utf8_mach_feed(struct tsm_utf8_mach *mach, char c);
 uint32_t tsm_utf8_mach_get(struct tsm_utf8_mach *mach);
 void tsm_utf8_mach_reset(struct tsm_utf8_mach *mach);
+/* true when no multi-byte sequence is half read */
+bool tsm_utf8_mach_idle(struct tsm_utf8_mach *mach);
 
 /* TSM screen */
 

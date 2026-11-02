@@ -566,3 +566,8 @@ void tsm_utf8_mach_reset(struct tsm_utf8_mach *mach)
 
 	mach->state = TSM_UTF8_START;
 }
+
+bool tsm_utf8_mach_idle(struct tsm_utf8_mach *mach)
+{
+	return !mach || mach->state <= TSM_UTF8_REJECT;
+}
