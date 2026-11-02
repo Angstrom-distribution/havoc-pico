@@ -1,7 +1,7 @@
 # CHANGES IN UNRELEASED (pico):
 
         The pico branch is upstream havoc at commit 73e3467 (version
-        0.7.0-git) with five patches for handhelds with a QVGA-class
+        0.7.0-git) with six patches for handhelds with a QVGA-class
         panel and about 64 MiB of RAM. There is no pico release or tag
         yet. Status says what is recorded about where they ran.
 
@@ -85,35 +85,78 @@
           redraw, which starts the table over. Emoji are drawn in the
           nearest colours without taking slots.
 
+##        Pictures:
+
+        * Havoc shows sixel pictures (DCS q) and a subset of the kitty
+          graphics protocol (APC G): raw RGB and RGBA, and with
+          HAVOC_PNG=1 PNG and zlib data. Both are off in the build and
+          at run time unless HAVOC_SIXEL=1 or HAVOC_KITTY=1 is given and
+          [graphics] sixel=yes or kitty=yes is set. doc/graphics.md has
+          the supported keys, the replies and the limits.
+
+        * A sixel picture is a set of tiles in the cells and scrolls,
+          enters the scrollback and is erased like text. A kitty picture
+          is a placement per screen that follows the lines but not the
+          text written over it. The pixels of all pictures together stay
+          within [graphics] memory (524288 by default); a picture with
+          anything in view is never evicted, the new one is refused.
+
+        * With pictures on, the answers to the device attributes,
+          XTSMGRAPHICS, CSI 14, 16 and 18 t and XTVERSION tell programs
+          that the terminal shows pictures, the pty carries the size in
+          pixels, and the pty is read 4 KiB at a time instead of 256
+          bytes. [graphics] kitty shm=yes allows kitty's shared memory
+          transfer (t=s), which refuses any object that is not a regular
+          file of the same user.
+
+        * In a C8 window a picture is dithered to the 6x6x6 cube with a
+          4x4 ordered pattern that moves with the picture, and takes no
+          slot from the text.
+
+        * libtsm gets interfaces for strings (tsm_vte_set_str_ops),
+          replies (tsm_vte_set_graphics, tsm_vte_reply), line events
+          (tsm_screen_set_event_cb) and, with HAVOC_SIXEL, tiles in the
+          cells. A number in an OSC sequence no longer overflows.
+
+        * Pictures, as before and after: doc/images/havoc-graphics-
+          sixel-before-framed.svg, havoc-graphics-sixel-after-framed.svg,
+          havoc-graphics-kitty-before-framed.svg and havoc-graphics-
+          kitty-after-framed.svg; havoc-graphics-scroll-framed.svg shows
+          a sixel picture scrolling away with the text. They are
+          captures of headless picowl in a container.
+
 ##        Build:
 
         * PIXFONT_OBJ=pixfont-none.o builds without the bitmap font
           data. PICOWL_PALETTE_XML names the picowl-palette-v1.xml file
           (it comes with picowl, not with this tree); without it havoc
           has no C8 code. EMOJI_DIR sets the default pack directory.
+          HAVOC_SIXEL, HAVOC_KITTY and HAVOC_PNG (0 or 1) build the
+          picture code; HAVOC_PNG=1 needs HAVOC_KITTY=1, libpng and
+          zlib.
 
 ##        Status:
 
-        * The pico branch has no test suite, and this repository records
-          no test results or device runs for these patches.
+        * Tests are in tests/ and run with sh tests/run.sh; they cover
+          the pictures, libtsm and the C8 dither. The other patches have
+          no tests, and this repository records no test results or
+          device runs for these patches.
 
         * havoc.cfg does not list the keys [window] c8 and [font] pixel
           yet.
 
         * Not shown: no pictures of the bitmap fonts, the emoji or a C8
           window have been made yet. They are needed before a release.
-
-        * Sixel and a subset of the kitty graphics protocol, with the
-          make variables HAVOC_SIXEL, HAVOC_KITTY and HAVOC_PNG, the
-          [graphics] keys and a test suite, are in pull request 1
-          (branch graphics) and not on pico. Its NEWS entry goes with
-          that pull request.
+          The pictures of sixel and kitty graphics are from a container,
+          not from a device.
 
 ##        Compatibility:
 
-        * New config keys: [window] c8, [font] pixel. New option: -E.
+        * New config keys: [window] c8, [font] pixel, [graphics] sixel,
+          kitty, kitty shm and memory. New option: -E.
           New environment variables: HAVOC_EMOJI_DIR,
           HAVOC_FULL_REDRAW. New make variables: EMOJI_DIR, PIXFONT_OBJ,
-          PICOWL_PALETTE_XML. With none of them set, havoc behaves as
+          PICOWL_PALETTE_XML, HAVOC_SIXEL, HAVOC_KITTY, HAVOC_PNG. With none
+          of them set, havoc behaves as
           upstream except for the damage and the opaque region, and
           code points that a pack in the default directory has.

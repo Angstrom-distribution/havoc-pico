@@ -21,3 +21,10 @@ then in `$HOME/.config/havoc/` and last in the current working directory.
 
 See the example `havoc.cfg` for available options.
 
+
+## Pictures
+
+havoc can show sixel pictures and a subset of the kitty graphics protocol.
+Both are off by default: build with `HAVOC_SIXEL=1`, `HAVOC_KITTY=1` and
+`HAVOC_PNG=1` and turn them on in the `[graphics]` section of `havoc.cfg`.
+See [doc/graphics.md](doc/graphics.md).
