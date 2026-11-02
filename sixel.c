@@ -385,8 +385,13 @@ int sixel_finish(struct sixel *s, struct sixel_image *out)
 		for (y = 1; y < have; y++)
 			memmove(s->pix + y * w, s->pix + y * maxw, w);
 	pix = realloc(s->pix, w * h);
-	if (!pix)
+	if (!pix) {
+		/* a failed shrink keeps the larger buffer; a failed growth
+		 * (the size hint taller than the canvas) has no room */
+		if (h > have)
+			return -1;
 		pix = s->pix;
+	}
 	s->pix = pix;
 	if (h > have)
 		memset(pix + have * w, 0, (h - have) * w);

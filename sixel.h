@@ -34,8 +34,9 @@ struct sixel *sixel_new(int argc, const int *argv,
 /* Bytes 0x20 to 0x7e of the string, any split. */
 void sixel_put(struct sixel *s, const char *buf, size_t len);
 /* The picture: pix and mask pass to the caller (free them); the decoder
- * still needs sixel_free. Returns 0, or -1 when w or h is 0 (nothing to
- * free then). */
+ * still needs sixel_free. Returns 0, or -1 when w or h is 0 or memory ran
+ * out (nothing to free then); gy, transparent and truncated are set
+ * either way. */
 int sixel_finish(struct sixel *s, struct sixel_image *out);
 void sixel_free(struct sixel *s);
 
