@@ -284,6 +284,19 @@ int main(void)
 		clear_res();
 		drop(name);
 	}
+	/* more pixels than the cap: ENOMEM as for t=d, the object stays */
+	{
+		static uint8_t over[3 * 101000];
+
+		fd = make(name, over, sizeof over);
+		close(fd);
+		CHECK(shm_cmd(k, name, 100001, 1, 0) == 1 && res[0].err == KITTY_EINVAL);
+		clear_res();
+		CHECK(shm_cmd(k, name, 1000, 101, 0) == 1 && res[0].err == KITTY_ENOMEM);
+		CHECK(exists(name));
+		clear_res();
+		drop(name);
+	}
 	/* shm off */
 	lim.shm = false;
 	kitty_set_limits(k, &lim);

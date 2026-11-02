@@ -567,10 +567,16 @@ static bool shm_load(struct kitty *k)
 		fail(k, KITTY_EBADF_SHM);
 		return false;
 	}
-	if (c->f == 100 || c->o == 'z')
+	if (c->f == 100 || c->o == 'z') {
 		need = 1;
-	else
+	} else {
+		/* the cap as for t=d, before the object is opened and removed */
+		if ((size_t)c->s * c->v > k->lim.max_pixels) {
+			fail(k, KITTY_ENOMEM);
+			return false;
+		}
 		need = (size_t)c->s * c->v * (c->f == 32 ? 4 : 3);
+	}
 	if (kitty_shm_open(k->name, k->name_len, need, 4 * k->lim.max_pixels, &m) < 0) {
 		fail(k, KITTY_EBADF_SHM);
 		return false;
