@@ -54,6 +54,7 @@ struct kitty {
 	bool sink_on;		/* a sink holds the transfer's data */
 #if HAVOC_PNG
 	struct kitty_z *z;	/* o=z */
+	size_t zout;		/* bytes inflated so far */
 	struct kitty_png *png;	/* f=100 */
 #endif
 
@@ -379,6 +380,7 @@ static enum kitty_err sink_start(struct kitty *k)
 	const struct kitty_cmd *c = &k->cmd;
 
 #if HAVOC_PNG
+	k->zout = 0;
 	if (c->o == 'z') {
 		k->z = kitty_z_new();
 		if (!k->z)
@@ -416,6 +418,13 @@ static bool sink_data(void *data, const uint8_t *b, size_t n)
 	struct kitty *k = data;
 
 #if HAVOC_PNG
+	/* libpng ignores what follows IEND, so without a bound a small zlib
+	 * stream could keep havoc inflating for a long time; 4 bytes per pixel
+	 * of the cap is also the bound for t=s */
+	if (k->z && (k->zout += n) > 4 * k->lim.max_pixels) {
+		seterr(k, KITTY_ENODATA);
+		return false;
+	}
 	if (k->png) {
 		enum kitty_err e = KITTY_OK;
 

@@ -1,6 +1,7 @@
 /* PNG (f=100) and zlib through the library, the pictures from kitty_ref.py.
  * Built only with HAVOC_PNG=1: test-kitty-png PNGDIR */
 #include <stdint.h>
+#include <zlib.h>
 #include "check.h"
 #include "kharness.h"
 #include "../kitty-png.h"
@@ -279,7 +280,23 @@ static void zlib_cases(const char *dir)
 			free(s);
 		}
 		/* data after the end of the stream */
-		memcpy(z + 7, raw, 29 * 17 * 3);
+		{
+			uLongf zl = compressBound(29 * 17 * 3) + 4;
+			uint8_t *zz = malloc(zl);
+
+			CHECK(compress(zz, &zl, raw, 29 * 17 * 3) == Z_OK);
+			memcpy(zz + zl, "more", 4);
+			b = b64enc(zz, zl + 4);
+			s = malloc(strlen(b) + 80);
+			sprintf(s, "Ga=t,f=24,s=29,v=17,o=z,i=1;%s", b);
+			clear_res();
+			CHECK(feed_apc(k, s, strlen(s), 0, false) == 1);
+			CHECK(res[0].err == KITTY_ENODATA && !res[0].img.rgb);
+			clear_res();
+			free(b);
+			free(s);
+			free(zz);
+		}
 		kitty_free(k);
 	}
 	(void)c565;
@@ -336,7 +353,39 @@ static void chunk_cases(const char *dir)
 		clear_res();
 		free(big);
 	}
-	/* PNG inside o=z and a PNG with s and v wrong: s, v are ignored */
+	/* PNG inside o=z, with s and v wrong: they are ignored for f=100 */
+	{
+		/* no padding, some, and one byte past 4 bytes per pixel */
+		size_t pads[] = { 0, 100, 4 * cap + 1 - n }, j;
+
+		for (j = 0; j < 3; j++) {
+			size_t pad = pads[j];
+			uLong in = n + pad;
+			uLongf zl = compressBound(in);
+			uint8_t *src = calloc(1, in), *zz = malloc(zl);
+			char *zb, *line;
+
+			memcpy(src, png, n);
+			CHECK(compress(zz, &zl, src, in) == Z_OK);
+			zb = b64enc(zz, zl);
+			line = malloc(strlen(zb) + 40);
+			sprintf(line, "Ga=t,f=100,o=z,s=1,v=1,i=1;%s", zb);
+			clear_res();
+			CHECK(feed_apc(k, line, strlen(line), 0, false) == 1);
+			/* bytes after IEND are ignored, up to the inflate bound */
+			if (j < 2) {
+				CHECK(res[0].err == KITTY_OK);
+				compare(dir, "rgba", &res[0].img, w, h, 1);
+			} else {
+				CHECK(res[0].err == KITTY_ENODATA && !res[0].img.rgb);
+			}
+			clear_res();
+			free(line);
+			free(zb);
+			free(zz);
+			free(src);
+		}
+	}
 	free(b);
 	free(png);
 	kitty_free(k);
