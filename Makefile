@@ -34,7 +34,7 @@ ifeq ($(HAVOC_SIXEL),1)
 GFX_OBJ += sixel.o
 endif
 ifeq ($(HAVOC_KITTY),1)
-GFX_OBJ += kitty.o base64.o kitty-shm.o
+GFX_OBJ += kitty.o kplace.o base64.o kitty-shm.o
 endif
 ifeq ($(HAVOC_PNG),1)
 ifneq ($(HAVOC_KITTY),1)
@@ -146,6 +146,6 @@ uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
 
 clean:
-	rm -f havoc $(XML) $(GEN) $(OBJ) graphics.o sixel.o kitty.o base64.o kitty-shm.o kitty-png.o picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
+	rm -f havoc $(XML) $(GEN) $(OBJ) graphics.o sixel.o kitty.o kplace.o base64.o kitty-shm.o kitty-png.o picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
 
 .PHONY: install uninstall clean
