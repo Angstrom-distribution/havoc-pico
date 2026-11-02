@@ -2542,6 +2542,26 @@ void tsm_vte_input(struct tsm_vte *vte, const char *u8, size_t len)
 
 	++vte->parse_cnt;
 	for (i = 0; i < len; ++i) {
+		/* Printable ASCII in a string goes through in one piece. The
+		 * UTF-8 machine is idle then, as a run starts with ASCII. */
+		if (u8[i] >= 0x20 && u8[i] <= 0x7e &&
+		    !(vte->flags & (FLAG_7BIT_MODE | FLAG_8BIT_MODE)) &&
+		    (vte->state == STATE_DCS_PASS ||
+		     vte->state == STATE_APC_STRING ||
+		     vte->state == STATE_DCS_IGNORE ||
+		     vte->state == STATE_ST_IGNORE) &&
+		    tsm_utf8_mach_idle(vte->mach)) {
+			size_t end = i + 1;
+
+			while (end < len && u8[end] >= 0x20 && u8[end] <= 0x7e)
+				end++;
+			if (vte->state == STATE_DCS_PASS ||
+			    vte->state == STATE_APC_STRING)
+				str_append(vte, u8 + i, end - i);
+			i = end - 1;
+			continue;
+		}
+
 		if (vte->flags & FLAG_7BIT_MODE) {
 			if (u8[i] & 0x80)
 				llog_debug(vte, "receiving 8bit character U+%d from pty while in 7bit mode",

@@ -437,6 +437,13 @@ static void test_not_taken(void)
 	row_is(0, "ok!");
 	teardown();
 
+	/* a UTF-8 sequence cut by a broken one does not leak into the data */
+	setup();
+	t_in(&T, "\033Pq\xc3");
+	t_in(&T, "ab\033\\");
+	data_is("b");
+	teardown();
+
 	/* control characters and non-ASCII data inside the string */
 	setup();
 	t_in(&T, "\033Pqa\nb\r\007\177\xc3\xa9" "c\033\\");
