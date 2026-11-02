@@ -327,6 +327,7 @@ static void errors(void)
 		{ "a=tt", KITTY_EINVAL },
 		{ "a=t,f=24,s=-4,v=4", KITTY_EINVAL },
 		{ "a=t,f=24,s=4,s=5,v=4", KITTY_EINVAL },	/* repeated, differs */
+		{ "a=t,a=T,f=24,s=4,v=4", KITTY_EINVAL },
 		{ "a=t,f=24,s=4,v=4,,i=1", KITTY_EINVAL },
 		{ "a=t,f=24,s=4,v=4,", KITTY_EINVAL },
 		{ "a=t,f=24,s=4x,v=4", KITTY_EINVAL },
@@ -408,30 +409,22 @@ static void errors(void)
 	free(s);
 	clear_res();
 
-	/* control part of 513 bytes */
-	strcpy(big, "Ga=t,f=24,s=1,v=1");
-	while (strlen(big) < 1 + 513)
-		strcat(big, ",x=1");
-	big[1 + 513] = 0;
-	strcat(big, ";AAAA");
-	CHECK(cmd(k, big) == 1 && res[0].err == KITTY_EINVAL);
-	clear_res();
-	/* 512 bytes are fine */
-	strcpy(big, "Ga=t,f=24,s=1,v=1");
-	while (strlen(big) < 1 + 512)
-		strcat(big, ",x=1");
-	big[1 + 512] = 0;
-	{
-		/* cut at a key boundary: pad with i= digits */
-		size_t l = strlen(big);
+	/* a valid control part of 512 bytes is fine, 513 is not: 16 bytes of
+	 * keys, 123 times ",x=1", ",y=1", then 0 or 1 more digit for y */
+	for (i = 0; i < 2; i++) {
+		int j;
 
-		while (big[l - 1] == ',' || big[l - 2] == ',' || big[l - 1] == 'x' ||
-		       big[l - 1] == '=')
-			big[--l] = 0;
+		strcpy(big, "Ga=t,f=24,s=1,v=1");
+		for (j = 0; j < 123; j++)
+			strcat(big, ",x=1");
+		strcat(big, ",y=1");
+		if (i)
+			strcat(big, "1");
+		CHECK(strlen(big) == 1 + 512 + i);
+		strcat(big, ";AAAA");
+		CHECK(cmd(k, big) == 1 && res[0].err == (i ? KITTY_EINVAL : KITTY_OK));
+		clear_res();
 	}
-	strcat(big, ";AAAA");
-	CHECK(cmd(k, big) == 1 && res[0].err == KITTY_OK);
-	clear_res();
 
 	/* z negative and saturating, large numbers */
 	s = mk("a=p,i=4294967296,z=-5000000000,x=99999999999", d, 0);

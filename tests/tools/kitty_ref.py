@@ -248,7 +248,8 @@ def chunk(t, body):
 
 def write_png(w, h, ct, bd, rows, plte=None, trns=None, interlace=0,
               bad_crc=False, truncate=0, trailing=b""):
-    """rows: list of bytes, each a scanline without filter byte."""
+    """rows: list of bytes, each a scanline without filter byte; with
+    interlace=1 the scanlines of the seven passes one after the other."""
     raw = b"".join(b"\0" + r for r in rows)
     out = b"\x89PNG\r\n\x1a\n"
     out += chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, bd, ct, 0, 0, interlace))
@@ -361,8 +362,16 @@ def gen_pngs(out):
     png, pix = mk("garbage", 8, 8, 2, 8, False, trailing=b"garbage after the end")
     add("garbage", png, 8, 8, pix, alpha=False)
     # errors
-    png, _ = mk("interlaced", 8, 8, 2, 8, False, interlace=1)
-    add("interlaced", png, 8, 8, None, "einval")
+    # a valid Adam7 file, so that only havoc's own check refuses it
+    rows = []
+    for x0, y0, dx, dy in ((0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8),
+                           (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2),
+                           (0, 1, 1, 2)):
+        for y in range(y0, 8, dy):
+            rows.append(bytes(v for x in range(x0, 8, dx)
+                              for v in pixel(x, y)[:3]))
+    add("interlaced", write_png(8, 8, 2, 8, rows, interlace=1), 8, 8, None,
+        "einval")
     add("toowide", write_png(5000, 10, 2, 8, [bytes(15000)] * 10), 5000, 10, None, "einval")
     png, _ = mk("badcrc", 8, 8, 2, 8, False, bad_crc=True)
     add("badcrc", png, 8, 8, None, "einval")
