@@ -1,0 +1,7 @@
+Terminal output captured from picture programs, one file per run: chafa,
+timg, kitty's icat, mpv and img2sixel showing the test images, with the
+queries they send answered as a terminal without pictures, as one with
+sixel, as one with sixel and kitty, or not at all (the name says which).
+They are input for test-vte-same, which checks that libtsm gives the same
+screen with and without the picture interfaces. The files that also exist
+in ../sixel and ../kitty are identical to those.
