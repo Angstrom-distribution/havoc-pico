@@ -18,11 +18,20 @@ PALETTE_GEN = picowl-palette-v1.h picowl-palette-v1.c
 PALETTE_OBJ = picowl-palette-v1.o
 PALETTE_DEFS = -DHAVE_PICOWL_PALETTE
 endif
-CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"' $(PALETTE_DEFS)
+# Pictures in the terminal: sixel (DCS q). Also off at run time until
+# [graphics] turns it on.
+HAVOC_SIXEL ?= 0
+GFX_DEFS = -DHAVOC_SIXEL=$(HAVOC_SIXEL)
+GFX_LIBS =
+GFX_OBJ =
+ifeq ($(HAVOC_SIXEL),1)
+GFX_OBJ += graphics.o sixel.o
+endif
+CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"' $(PALETTE_DEFS) $(GFX_DEFS)
 
 WAYLAND_PROTOCOLS_DIR != $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols
 
-LIBRARIES = wayland-client wayland-cursor xkbcommon
+LIBRARIES = wayland-client wayland-cursor xkbcommon $(GFX_LIBS)
 PKG_CFLAGS != $(PKG_CONFIG) --cflags $(LIBRARIES)
 PKG_LIBS != $(PKG_CONFIG) --libs $(LIBRARIES)
 
@@ -65,6 +74,7 @@ OBJ = \
 	fractional-scale-v1.o \
 	text-input-unstable-v3.o \
 	$(PALETTE_OBJ) \
+	$(GFX_OBJ) \
 	tsm/wcwidth.o \
 	tsm/shl-htable.o \
 	tsm/tsm-render.o \
@@ -120,6 +130,6 @@ uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
 
 clean:
-	rm -f havoc $(XML) $(GEN) $(OBJ) picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
+	rm -f havoc $(XML) $(GEN) $(OBJ) graphics.o sixel.o picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
 
 .PHONY: install uninstall clean
