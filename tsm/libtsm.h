@@ -206,8 +206,9 @@ void tsm_screen_set_event_cb(struct tsm_screen *con, tsm_screen_event_cb cb,
  * cols, become blank cells with attr (pic set per cell); a wide character
  * cut by the first or last tile column is blanked (its other half with
  * def_attr). Between rows a line feed, scrolling at the bottom margin. The
- * cursor then goes to row cursor_row (0-based, clamped to 0 when that row
- * scrolled off) at the start column, or with TSM_PIC_CURSOR_RIGHT to the
+ * cursor then goes to row cursor_row (0-based; when that row scrolled off,
+ * the top of the scroll region the cursor started in, else row 0) at the
+ * start column, or with TSM_PIC_CURSOR_RIGHT to the
  * column after the picture, wrapping to column 0 of the next line (with
  * scroll) past the right margin. Returns 0, or -EINVAL for slot not in
  * 1..255, cols or rows not in 1..TSM_PIC_MAX. */
@@ -423,6 +424,8 @@ struct tsm_vte_str_ops {
 	void (*end)(void *data, enum tsm_vte_str_end how);
 };
 
+/* Replacing the ops, tsm_vte_reset() and the last tsm_vte_unref() call
+ * end(ABORT) for an open string, so set NULL ops before freeing data. */
 void tsm_vte_set_str_ops(struct tsm_vte *vte,
 			 const struct tsm_vte_str_ops *ops, void *data);
 
