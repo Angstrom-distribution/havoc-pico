@@ -21,13 +21,15 @@ endif
 # Pictures in the terminal: sixel (DCS q) and a subset of the kitty graphics
 # protocol (APC G). HAVOC_PNG adds PNG (f=100) and zlib (o=z) to kitty with
 # libpng. Each is also off at run time until [graphics] turns it on.
-# graphics.o and kplace.o, the glue to the window, are added with that code.
 HAVOC_SIXEL ?= 0
 HAVOC_KITTY ?= 0
 HAVOC_PNG ?= 0
 GFX_DEFS = -DHAVOC_SIXEL=$(HAVOC_SIXEL) -DHAVOC_KITTY=$(HAVOC_KITTY) -DHAVOC_PNG=$(HAVOC_PNG)
 GFX_LIBS =
 GFX_OBJ =
+ifneq ($(HAVOC_SIXEL)$(HAVOC_KITTY),00)
+GFX_OBJ += graphics.o
+endif
 ifeq ($(HAVOC_SIXEL),1)
 GFX_OBJ += sixel.o
 endif
@@ -144,6 +146,6 @@ uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
 
 clean:
-	rm -f havoc $(XML) $(GEN) $(OBJ) sixel.o kitty.o base64.o kitty-shm.o kitty-png.o picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
+	rm -f havoc $(XML) $(GEN) $(OBJ) graphics.o sixel.o kitty.o base64.o kitty-shm.o kitty-png.o picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
 
 .PHONY: install uninstall clean
