@@ -87,3 +87,52 @@ void c8_palette(const struct c8_table *t, uint32_t out[256])
 	for (i = 0; i < t->n; ++i)
 		out[c8_slot_index(i)] = t->rgb[i];
 }
+
+#if HAVOC_SIXEL || HAVOC_KITTY
+/* Ordered dither of a picture pixel to the cube. The tables are built on
+ * the first call, the only place that divides; a pixel costs three lookups
+ * and three compares. Per channel v: lo[v] is the highest level index with
+ * level <= v and frac[v] is how far v is from it towards the next level, in
+ * sixteenths; the next level is taken when frac is above the pattern's
+ * threshold, so a pixel that is a cube colour never changes. */
+static uint8_t dlo[256], dfrac[256];
+static bool dready;
+
+static const uint8_t bayer[16] = {
+	0, 8, 2, 10,
+	12, 4, 14, 6,
+	3, 11, 1, 9,
+	15, 7, 13, 5,
+};
+
+static void dither_tables(void)
+{
+	int v, l = 0;
+
+	for (v = 0; v < 256; ++v) {
+		while (l < 5 && v >= level[l + 1])
+			l++;
+		dlo[v] = l;
+		dfrac[v] = v == 255 ? 0 :
+			   (v - level[l]) * 16 / (level[l + 1] - level[l]);
+	}
+	dready = true;
+}
+
+uint8_t c8_dither(uint32_t rgb, unsigned int phase)
+{
+	unsigned int th;
+	unsigned int r, g, b;
+
+	if (!dready)
+		dither_tables();
+	th = bayer[phase & 15];
+	r = rgb >> 16 & 255;
+	g = rgb >> 8 & 255;
+	b = rgb & 255;
+	r = dlo[r] + (dfrac[r] > th);
+	g = dlo[g] + (dfrac[g] > th);
+	b = dlo[b] + (dfrac[b] > th);
+	return 16 + 36 * r + 6 * g + b;
+}
+#endif

@@ -6,7 +6,8 @@
  * cap, every tile drawn names a slot that exists, every placement names an
  * image that exists and the images count their placements right.
  *
- * Input: byte 0 picks the cap, byte 1 the cell size; then terminal data, in
+ * Input: byte 0 picks the cap (its lowest bit: draw with the phase bytes of
+ * a C8 window), byte 1 the cell size; then terminal data, in
  * which 0x01 followed by one byte is an action of the window instead (draw,
  * scroll the view, resize, zoom, reset).
  */
@@ -14,6 +15,19 @@
 #include "../graphics.c"
 
 static uint32_t cellbuf[32 * 32];
+static uint8_t phasebuf[32 * 32];
+static bool c8;
+
+/* a target for one cell, as main.c sets it up */
+static void target(struct gfx *g, struct gfx_target *t)
+{
+	t->px = cellbuf;
+	t->stride = 32;
+	t->w = g->cw;
+	t->h = g->ch;
+	t->phase = c8 ? phasebuf : NULL;
+	t->phase_stride = 32;
+}
 
 static void write_cb(struct tsm_vte *vte, const char *u8, size_t len,
 		     void *data)
@@ -85,10 +99,7 @@ static void draw_cb(struct tsm_screen *con, uint32_t id, const uint32_t *ch,
 	}
 	if (!gfx_pic_gen(g, a->pic))
 		abort();
-	t.px = cellbuf;
-	t.stride = 32;
-	t.w = g->cw;
-	t.h = g->ch;
+	target(g, &t);
 	gfx_paint(g, GFX_TILE, x, y, a->pic, &t);
 }
 
@@ -107,10 +118,7 @@ static void paint_frame(struct gfx *g, int cols, int rows)
 	int x, y, l;
 
 	gfx_frame(g, klayer, lmask);
-	t.px = cellbuf;
-	t.stride = 32;
-	t.w = g->cw;
-	t.h = g->ch;
+	target(g, &t);
 	for (y = 0; y < rows; y++)
 		for (x = 0; x < cols; x++)
 			for (l = 0; l < 3; l++)
@@ -132,6 +140,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	cfg.sixel = true;
 	cfg.kitty = true;
 	cfg.memory = (size_t)data[0] * 2048;
+	c8 = data[0] & 1;
 	cw = 1 + data[1] % 16;
 	ch = 1 + (data[1] >> 4) * 2;
 	data += 2;
