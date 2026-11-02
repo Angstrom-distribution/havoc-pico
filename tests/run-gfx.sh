@@ -92,14 +92,18 @@ fi
 # placement lists under libFuzzer, seeded with the vectors behind a cap and
 # cell-size header and window actions between them
 FUZZ_SECONDS=${FUZZ_SECONDS:-60}
+# a fuzzer that does not build is a failure; only a clang without
+# libFuzzer skips it
+printf 'int LLVMFuzzerTestOneInput(const char *d, unsigned long n) { return 0; }\n' >"$work/probe.c"
 if [ "$FUZZ_SECONDS" -gt 0 ] && command -v clang >/dev/null &&
+	clang -fsanitize=fuzzer -o "$work/probe" "$work/probe.c" 2>/dev/null; then
 	clang -g -O1 -w -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined \
 		-DHAVOC_SIXEL=1 -DHAVOC_KITTY=1 -DHAVOC_PNG=1 -DVERSION='"0.7.0-git"' \
 		-D_XOPEN_SOURCE=700 $(pkg-config --cflags xkbcommon libpng zlib) -I"$top" \
 		-o "$work/fuzz-gfx" "$top/tests/fuzz-gfx.c" "$top/sixel.c" "$top/kitty.c" \
 		"$top/kitty-png.c" "$top/kitty-shm.c" "$top/base64.c" "$top/kplace.c" \
-		"$top"/tsm/*.c $(pkg-config --libs libpng zlib) -lrt \
-		2>"$work/fuzz-cc.log"; then
+		"$top/c8.c" "$top"/tsm/*.c $(pkg-config --libs libpng zlib) -lrt \
+		2>"$work/fuzz-cc.log" || { cat "$work/fuzz-cc.log" >&2; echo "FAIL: fuzz-gfx does not build" >&2; exit 1; }
 	mkdir "$work/corpus"
 	n=0
 	for f in "$top"/tests/vectors/kitty/*.bin; do
