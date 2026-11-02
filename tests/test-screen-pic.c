@@ -215,6 +215,29 @@ static void test_scrolling(void)
 	cursor_is(0, 4);
 	place(5, 2, 3, -4, 0);
 	t_free(&T);
+
+	/* in a region the cursor stops at the region top, not at row 0 */
+	setup();
+	t_in(&T, "\033[4;9r\033[8;1H");
+	place(6, 2, 8, 0, 0);
+	CHECK_INT(nscroll, 6);
+	grab();
+	CHECK_INT(G.pic[3][0], TSM_PIC(6, 0, 2));
+	CHECK_INT(G.pic[8][1], TSM_PIC(6, 1, 7));
+	CHECK_INT(G.pic[2][0], 0);
+	CHECK_INT(G.pic[9][0], 0);
+	cursor_is(0, 3);
+	t_free(&T);
+
+	/* a line the alternate screen reuses after a scroll holds no tile */
+	setup();
+	t_in(&T, "\033[?1049h\033[1;1H");
+	place(6, 2, 1, 0, 0);
+	CHECK_INT(T.scr->lines[0]->has_pic, 1);
+	t_in(&T, "\033[12;1H\n");
+	CHECK_INT(T.scr->lines[11]->has_pic, 0);
+	CHECK_INT(count_pics(), 0);
+	t_free(&T);
 }
 
 static void test_wide(void)
