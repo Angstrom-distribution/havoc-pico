@@ -124,6 +124,25 @@ int main(void)
 	CHECK(kitty_shm_open("..", 2, 1, 4096, &m) == -1);
 	CHECK(kitty_shm_open(".", 1, 1, 4096, &m) == -1);
 	{
+		/* the name with a NUL, a slash or a newline after it: the
+		 * object of the part before must not be opened */
+		char nm[256];
+		const char tails[] = { 0, '/', '\n', '\\' };
+		size_t l = strlen(name), t;
+
+		for (t = 0; t < sizeof tails; t++) {
+			memcpy(nm, name, l);
+			nm[l] = tails[t];
+			nm[l + 1] = 'x';
+			CHECK(kitty_shm_open(nm, l + 2, 1, 4096, &m) == -1);
+			CHECK(kitty_shm_open(nm, l + 1, 1, 4096, &m) == -1);
+		}
+		/* the bytes above 127 */
+		memcpy(nm, name, l);
+		nm[l] = (char)0xc3;
+		CHECK(kitty_shm_open(nm, l + 1, 1, 4096, &m) == -1);
+	}
+	{
 		char long_name[300];
 
 		memset(long_name, 'a', sizeof long_name);

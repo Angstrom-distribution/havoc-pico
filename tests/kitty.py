@@ -1041,6 +1041,52 @@ def sc_shm(r):
     check(r.since().count(b"EBADF:shared memory not usable") == 3,
           "shm: failures %r" % r.since())
     os.unlink(path) if os.path.exists(path) else None
+    # hostile names: an absolute path, dots, a NUL, a name too long; the
+    # objects the names could reach stay
+    with open(path, "wb") as f:
+        f.write(raw(im))
+    hostile = [b"/" + name.encode(), b".", b"..", b"../" + name.encode(),
+               name.encode() + b"\0", name.encode() + b"/", b"x" * 256,
+               b"..\\" + name.encode(), name.encode() + b"\n"]
+    r.mark()
+    for i, n in enumerate(hostile):
+        r.feed(apc("a=t,f=32,s=32,v=24,t=s,i=%d" % (20 + i), n))
+    r.sync()
+    check(r.since().count(b"EBADF:shared memory not usable") == len(hostile),
+          "shm: hostile names %r" % r.since())
+    check(os.path.exists(path), "shm: an object removed by a hostile name")
+    # an object above the cap (4 bytes per pixel of memory=524288), sparse
+    with open(path, "wb") as f:
+        f.truncate(4 * 524288 + 4)
+    r.mark()
+    r.feed(apc("a=t,f=32,s=32,v=24,t=s,i=30", name.encode()))
+    r.sync()
+    check(r.since() == b"\x1b_Gi=30;EBADF:shared memory not usable\x1b\\",
+          "shm: huge object %r" % r.since())
+    check(os.path.exists(path), "shm: huge object removed")
+    # more pixels than the cap: refused before the object is opened
+    r.mark()
+    r.feed(apc("a=t,f=32,s=1024,v=1024,t=s,i=31", name.encode()))
+    r.sync()
+    check(r.since().startswith(b"\x1b_Gi=31;ENOMEM"), "shm: over the cap %r" %
+          r.since())
+    check(os.path.exists(path), "shm: object removed for a refused size")
+    # an object of another user (root only can make one): refused and kept
+    if os.geteuid() == 0:
+        with open(path, "wb") as f:
+            f.write(raw(im))
+        os.chown(path, 65534, 65534)
+        r.mark()
+        r.feed(apc("a=t,f=32,s=32,v=24,t=s,i=32", name.encode()))
+        r.sync()
+        check(r.since() == b"\x1b_Gi=32;EBADF:shared memory not usable\x1b\\",
+              "shm: other user %r" % r.since())
+        check(os.path.exists(path), "shm: object of another user removed")
+    else:
+        print("note: not root, the other-user case is skipped")
+    os.unlink(path)
+    d = r.debug()
+    check(d and d["kitty"] == 1, "shm: refused objects stored %r" % d)
     # t=f and t=t are refused
     r.mark()
     r.feed(apc("a=t,f=32,s=1,v=1,t=f,i=5", b"/etc/passwd"))
