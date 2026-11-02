@@ -160,6 +160,21 @@ void screen_cell_init(struct tsm_screen *con, struct cell *cell,
 	memcpy(&cell->attr, attr, sizeof(cell->attr));
 }
 
+#if HAVOC_SIXEL
+/* A line taken for new text has its cells up to size_x reset. Cells right
+ * of a narrower screen keep their text, as before, but lose their tiles:
+ * with has_pic cleared the sweep would no longer see them, and they would
+ * name a freed slot when the screen widens again. */
+static void line_reused(struct tsm_screen *con, struct line *line)
+{
+	int x;
+
+	for (x = con->size_x; x < line->size; x++)
+		line->cells[x].attr.pic = 0;
+	line->has_pic = 0;
+}
+#endif
+
 static int line_new(struct tsm_screen *con, struct line **out, int width,
 		    struct tsm_screen_attr *attr)
 {
@@ -340,7 +355,7 @@ static void screen_scroll_up_(struct tsm_screen *con, int num)
 				screen_cell_init(con, &cache[i]->cells[j],
 						 &con->def_attr);
 #if HAVOC_SIXEL
-			cache[i]->has_pic = 0;
+			line_reused(con, cache[i]);
 #endif
 		}
 		con->vanguard--;
@@ -417,7 +432,7 @@ static void screen_scroll_down_(struct tsm_screen *con, int num)
 			screen_cell_init(con, &cache[i]->cells[j],
 					 &con->def_attr);
 #if HAVOC_SIXEL
-		cache[i]->has_pic = 0;
+		line_reused(con, cache[i]);
 #endif
 		con->vanguard++;
 	}
@@ -1432,7 +1447,7 @@ void tsm_screen_insert_lines(struct tsm_screen *con, int num)
 			screen_cell_init(con, &cache[i]->cells[j],
 					 &con->def_attr);
 #if HAVOC_SIXEL
-		cache[i]->has_pic = 0;
+		line_reused(con, cache[i]);
 #endif
 		if (con->cursor_y < con->vanguard)
 			con->vanguard++;
@@ -1481,7 +1496,7 @@ void tsm_screen_delete_lines(struct tsm_screen *con, int num)
 			screen_cell_init(con, &cache[i]->cells[j],
 					 &con->def_attr);
 #if HAVOC_SIXEL
-		cache[i]->has_pic = 0;
+		line_reused(con, cache[i]);
 #endif
 		if (con->cursor_y <= con->vanguard)
 			con->vanguard--;

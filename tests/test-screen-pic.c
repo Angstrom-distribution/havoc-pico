@@ -447,6 +447,29 @@ static void test_used_drop(void)
 	t_free(&T);
 }
 
+/* Tiles right of a narrower screen go with their line when it is reused:
+ * the sweep no longer looks at the line, so they must not come back when
+ * the screen widens. */
+static void test_narrow(void)
+{
+	uint8_t used[TSM_PIC_SETS][32];
+	uint8_t none[32] = { 0 };
+	int i;
+
+	setup();
+	t_in(&T, "\033[?1049h\033[1;11H");
+	place(7, 3, 1, 0, 0);
+	CHECK_INT(tsm_screen_resize(T.scr, 5, ROWS), 0);
+	t_in(&T, "\033[12;1H");
+	for (i = 0; i < ROWS; i++)
+		t_in(&T, "\n");
+	tsm_screen_pictures_used(T.scr, used);
+	CHECK(!memcmp(used[TSM_PIC_ALT], none, 32));
+	CHECK_INT(tsm_screen_resize(T.scr, COLS, ROWS), 0);
+	CHECK_INT(count_pics(), 0);
+	t_free(&T);
+}
+
 static void test_invalid(void)
 {
 	setup();
@@ -472,6 +495,7 @@ int main(void)
 	test_wide();
 	test_text();
 	test_used_drop();
+	test_narrow();
 	test_invalid();
 	return t_summary("test-screen-pic");
 }
