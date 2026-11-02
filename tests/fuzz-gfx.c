@@ -1,8 +1,10 @@
 /*
- * libFuzzer harness for the picture store with a real libtsm screen, vte
- * and sixel decoder (HAVOC_SIXEL=1). graphics.c is included so that the
- * harness can check the store: the pixel count is the sum of the slots and
- * within the cap, and every tile drawn names a slot that exists.
+ * libFuzzer harness for the picture store with a real libtsm screen, vte,
+ * sixel and kitty decoders and placement lists (HAVOC_SIXEL=1
+ * HAVOC_KITTY=1). graphics.c is included so that the harness can check the
+ * store: the pixel count is the sum of the slots and images and within the
+ * cap, every tile drawn names a slot that exists, every placement names an
+ * image that exists and the images count their placements right.
  *
  * Input: byte 0 picks the cap, byte 1 the cell size; then terminal data, in
  * which 0x01 followed by one byte is an action of the window instead (draw,
@@ -26,6 +28,40 @@ static void check_store(struct gfx *g)
 	for (i = 1; i < NSLOTS; i++)
 		if (g->slot[i])
 			sum += (size_t)g->slot[i]->w * g->slot[i]->h;
+#if HAVOC_KITTY
+	{
+		int count[KIMG_MAX] = { 0 };
+		int s, j, nimg = 0;
+
+		for (i = 0; i < KIMG_MAX; i++)
+			if (g->img[i]) {
+				sum += (size_t)g->img[i]->w * g->img[i]->h;
+				nimg++;
+			}
+		for (s = 0; s < 2; s++) {
+			if (g->pl[s].n > KPLACE_MAX)
+				abort();
+			for (j = 0; j < g->pl[s].n; j++) {
+				uint32_t h = g->pl[s].v[j].image;
+
+				if (!h || h > KIMG_MAX || !g->img[h - 1]) {
+					fprintf(stderr, "fuzz-gfx: placement of image %u, which is free\n", h);
+					abort();
+				}
+				count[h - 1]++;
+			}
+		}
+		for (i = 0; i < KIMG_MAX; i++)
+			if (g->img[i] && (count[i] != g->img[i]->nplace ||
+					  (!g->img[i]->id && !count[i]))) {
+				fprintf(stderr, "fuzz-gfx: image %u has %d placements, counts %d\n",
+					i, count[i], g->img[i]->nplace);
+				abort();
+			}
+		if (nimg != g->nimg)
+			abort();
+	}
+#endif
 	if (sum != g->pixels || g->pixels > g->cfg.memory) {
 		fprintf(stderr, "fuzz-gfx: pixels %zu, slots %zu, cap %zu\n",
 			g->pixels, sum, g->cfg.memory);
@@ -53,7 +89,33 @@ static void draw_cb(struct tsm_screen *con, uint32_t id, const uint32_t *ch,
 	t.stride = 32;
 	t.w = g->cw;
 	t.h = g->ch;
-	gfx_paint(g, GFX_TILE, a->pic, &t);
+	gfx_paint(g, GFX_TILE, x, y, a->pic, &t);
+}
+
+static uint32_t klayer[64 * 64];
+static uint8_t lmask[64 * 64];
+
+/* what main.c does for a frame: the layers of the kitty placements over
+ * every cell */
+static void paint_frame(struct gfx *g, int cols, int rows)
+{
+	static const enum gfx_layer layers[] = { GFX_UNDER_BG, GFX_UNDER_TEXT,
+						 GFX_OVER_TEXT };
+	static const uint8_t bits[] = { GFX_HAS_UNDER_BG, GFX_HAS_UNDER_TEXT,
+					GFX_HAS_OVER_TEXT };
+	struct gfx_target t;
+	int x, y, l;
+
+	gfx_frame(g, klayer, lmask);
+	t.px = cellbuf;
+	t.stride = 32;
+	t.w = g->cw;
+	t.h = g->ch;
+	for (y = 0; y < rows; y++)
+		for (x = 0; x < cols; x++)
+			for (l = 0; l < 3; l++)
+				if (lmask[y * cols + x] & bits[l])
+					gfx_paint(g, layers[l], x, y, 0, &t);
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
@@ -68,6 +130,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	if (size < 2)
 		return 0;
 	cfg.sixel = true;
+	cfg.kitty = true;
 	cfg.memory = (size_t)data[0] * 2048;
 	cw = 1 + data[1] % 16;
 	ch = 1 + (data[1] >> 4) * 2;
@@ -98,6 +161,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		switch (data[i + 1] & 7) {
 		case 0:
 			tsm_screen_draw(scr, draw_cb, g);
+			paint_frame(g, cols, rows);
 			break;
 		case 1:
 			tsm_screen_sb_up(scr, 1 + (data[i + 1] >> 3));
@@ -129,6 +193,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		}
 		i += 2;
 		tsm_screen_draw(scr, draw_cb, g);
+		paint_frame(g, cols, rows);
 		check_store(g);
 	}
 
