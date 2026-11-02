@@ -310,6 +310,46 @@ bool tsm_vte_handle_keyboard(struct tsm_vte *vte, uint32_t keysym,
 void tsm_vte_paste_begin(struct tsm_vte *vte);
 void tsm_vte_paste_end(struct tsm_vte *vte);
 
+/* Control strings (DCS, APC) for a consumer: the vte calls start when one
+ * begins, put with its data and end exactly once after every start that
+ * returned true. Without ops, or when start returns false, the string is
+ * ignored up to its end as before. */
+enum tsm_vte_str_kind {
+	TSM_VTE_STR_DCS,
+	TSM_VTE_STR_APC,
+};
+
+enum tsm_vte_str_end {
+	TSM_VTE_STR_DONE,	/* ST: ESC \ or U+009C */
+	TSM_VTE_STR_ABORT,	/* CAN, SUB, ESC + other, another C1, reset, put false */
+};
+
+/* info.flags */
+#define TSM_VTE_STR_PRIVATE		0x01	/* a < = > ? before the final byte */
+#define TSM_VTE_STR_INTERMEDIATE	0x02	/* a byte 0x20 to 0x2f before it */
+
+struct tsm_vte_str_info {
+	enum tsm_vte_str_kind kind;
+	uint32_t final;		/* DCS: final byte ('q' for sixel); APC: 0 */
+	unsigned int flags;
+	int argc;		/* DCS: parameters given, at least 1; APC: 0 */
+	const int *argv;	/* -1 for an empty one; valid during start only */
+};
+
+struct tsm_vte_str_ops {
+	bool (*start)(void *data, const struct tsm_vte_str_info *info);
+	/* bytes 0x20 to 0x7e, 1 to 256 at a time; false: libtsm calls
+	 * end(ABORT) at once and ignores the rest of the string. Bytes
+	 * still held back when a string is aborted are dropped. */
+	bool (*put)(void *data, const char *buf, size_t len);
+	void (*end)(void *data, enum tsm_vte_str_end how);
+};
+
+/* Replacing the ops, tsm_vte_reset() and the last tsm_vte_unref() call
+ * end(ABORT) for an open string, so set NULL ops before freeing data. */
+void tsm_vte_set_str_ops(struct tsm_vte *vte,
+			 const struct tsm_vte_str_ops *ops, void *data);
+
 /** @} */
 
 #ifdef __cplusplus

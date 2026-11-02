@@ -76,6 +76,8 @@ enum parser_state {
 	STATE_DCS_IGNORE,	/* DCS error; ignore this DCS sequence */
 	STATE_OSC_STRING,	/* parsing OCS sequence */
 	STATE_ST_IGNORE,	/* unimplemented seq; ignore until ST */
+	STATE_APC_STRING,	/* APC data passthrough */
+	STATE_STR_ESC,		/* ESC inside a DCS or APC string */
 	STATE_NUM
 };
 
@@ -91,8 +93,7 @@ enum parser_action {
 	ACTION_ESC_DISPATCH,	/* dispatch escape sequence */
 	ACTION_CSI_DISPATCH,	/* dispatch csi sequence */
 	ACTION_DCS_START,	/* start of DCS data */
-	ACTION_DCS_COLLECT,	/* collect DCS data */
-	ACTION_DCS_END,		/* end of DCS data */
+	ACTION_APC_START,	/* start of APC data */
 	ACTION_OSC_START,	/* start of OSC data */
 	ACTION_OSC_COLLECT,	/* collect OSC data */
 	ACTION_OSC_END,		/* end of OSC data */
@@ -116,6 +117,9 @@ enum parser_action {
 #define CSI_ARG_MAX 16
 
 #define OSC_BUFSIZE 256
+
+/* bytes of string data per put call */
+#define STR_BUFSIZE 256
 
 /* terminal flags */
 #define FLAG_CURSOR_KEY_MODE			0x00000001 /* DEC cursor key mode */
@@ -168,6 +172,15 @@ struct tsm_vte {
 	char osc_arg[OSC_BUFSIZE];
 	int osc_len;
 
+	/* DCS and APC strings handed to a consumer */
+	const struct tsm_vte_str_ops *str_ops;
+	void *str_data;
+	bool str_open;		/* start returned true, end not called yet */
+	enum tsm_vte_str_kind str_kind;
+	char str_buf[STR_BUFSIZE];
+	unsigned int str_len;
+	unsigned int str_marks;	/* TSM_VTE_STR_* seen before the final byte */
+
 	struct tsm_screen_attr def_attr;
 	struct tsm_screen_attr cattr;
 	unsigned int flags;
@@ -188,6 +201,10 @@ struct tsm_vte {
 	bool pasting;
 	int endpaste_i;
 };
+
+static void parse_data(struct tsm_vte *vte, uint32_t raw);
+static void str_abort(struct tsm_vte *vte);
+static void do_trans(struct tsm_vte *vte, uint32_t data, int state, int act);
 
 #define cube6(r, g) \
 	{ r, g, 0}, \
@@ -322,6 +339,7 @@ void tsm_vte_unref(struct tsm_vte *vte)
 	if (!vte->ref || --vte->ref)
 		return;
 
+	str_abort(vte);
 	tsm_screen_unref(vte->con);
 	tsm_utf8_mach_free(vte->mach);
 	free(vte);
@@ -530,14 +548,185 @@ static void restore_state(struct tsm_vte *vte)
 }
 
 /*
+ * DCS and APC strings
+ * A consumer set with tsm_vte_set_str_ops() gets the string in pieces. The
+ * parser holds at most STR_BUFSIZE bytes back, so the consumer sees the data
+ * of a long string while it still arrives. Every start that returned true is
+ * followed by exactly one end.
+ */
+
+/* the state that skips the rest of a string */
+static void str_ignore(struct tsm_vte *vte)
+{
+	vte->str_len = 0;
+	vte->state = vte->str_kind == TSM_VTE_STR_DCS ? STATE_DCS_IGNORE :
+							 STATE_ST_IGNORE;
+}
+
+static bool str_state(unsigned int state)
+{
+	return state == STATE_DCS_PASS || state == STATE_APC_STRING ||
+	       state == STATE_STR_ESC;
+}
+
+/* Call end(ABORT) for an open string; the parser then skips what is left. */
+static void str_abort(struct tsm_vte *vte)
+{
+	if (!vte->str_open)
+		return;
+
+	vte->str_open = false;
+	vte->str_ops->end(vte->str_data, TSM_VTE_STR_ABORT);
+	if (vte->state == STATE_STR_ESC) {
+		vte->str_len = 0;
+		vte->state = STATE_ESC;
+	} else if (str_state(vte->state)) {
+		str_ignore(vte);
+	}
+}
+
+static void str_start(struct tsm_vte *vte, enum tsm_vte_str_kind kind,
+		      uint32_t final)
+{
+	struct tsm_vte_str_info info;
+	int argv[CSI_ARG_MAX];
+	int argc;
+
+	vte->str_len = 0;
+	vte->str_kind = kind;
+	vte->str_open = false;
+	if (!vte->str_ops)
+		return;
+
+	memset(&info, 0, sizeof(info));
+	info.kind = kind;
+	if (kind == TSM_VTE_STR_DCS) {
+		argc = vte->csi_argc;
+		if (argc < CSI_ARG_MAX)
+			argc++;
+		memcpy(argv, vte->csi_argv, sizeof(argv));
+		info.final = final;
+		info.flags = vte->str_marks;
+		info.argc = argc;
+		info.argv = argv;
+	}
+
+	vte->str_open = vte->str_ops->start(vte->str_data, &info);
+}
+
+/* Hand the buffered data over. False: the consumer gave up. */
+static bool str_flush(struct tsm_vte *vte)
+{
+	unsigned int len = vte->str_len;
+
+	if (!len)
+		return true;
+
+	vte->str_len = 0;
+	if (vte->str_ops->put(vte->str_data, vte->str_buf, len))
+		return true;
+
+	vte->str_open = false;
+	vte->str_ops->end(vte->str_data, TSM_VTE_STR_ABORT);
+	str_ignore(vte);
+	return false;
+}
+
+/* Append bytes 0x20 to 0x7e. */
+static void str_append(struct tsm_vte *vte, const char *buf, size_t len)
+{
+	size_t n;
+
+	while (len && vte->str_open) {
+		n = STR_BUFSIZE - vte->str_len;
+		if (n > len)
+			n = len;
+		memcpy(vte->str_buf + vte->str_len, buf, n);
+		vte->str_len += n;
+		buf += n;
+		len -= n;
+		if (vte->str_len == STR_BUFSIZE && !str_flush(vte))
+			return;
+	}
+}
+
+/* ST: the string is complete */
+static void str_done(struct tsm_vte *vte)
+{
+	if (str_flush(vte)) {
+		vte->str_open = false;
+		vte->str_ops->end(vte->str_data, TSM_VTE_STR_DONE);
+	}
+	vte->state = STATE_GROUND;
+}
+
+/*
+ * Input while a string is open. Returns true when the byte is used up; false
+ * when the string was aborted by a byte that the general parser handles.
+ */
+static bool str_input(struct tsm_vte *vte, uint32_t raw)
+{
+	char c;
+
+	if (vte->state == STATE_STR_ESC) {
+		if (raw == '\\') {
+			str_done(vte);
+			return true;
+		}
+		/* ESC and the byte after it start something new */
+		vte->str_open = false;
+		vte->str_len = 0;
+		vte->str_ops->end(vte->str_data, TSM_VTE_STR_ABORT);
+		do_trans(vte, 0x1b, STATE_ESC, ACTION_NONE);
+		parse_data(vte, raw);
+		return true;
+	}
+
+	switch (raw) {
+	case 0x1b:
+		vte->state = STATE_STR_ESC;
+		return true;
+	case 0x9c:
+		str_done(vte);
+		return true;
+	case 0x18:
+	case 0x1a:
+	case 0x80 ... 0x9b:
+	case 0x9d ... 0x9f:
+		vte->str_open = false;
+		vte->str_len = 0;
+		vte->str_ops->end(vte->str_data, TSM_VTE_STR_ABORT);
+		return false;
+	case 0x20 ... 0x7e:
+		c = raw;
+		str_append(vte, &c, 1);
+		return true;
+	}
+
+	/* other control characters and non-ASCII data are dropped */
+	return true;
+}
+
+/*
  * Reset VTE state
  * This performs a soft reset of the VTE. That is, everything is reset to the
  * same state as when the VTE was created. This does not affect the console,
  * though.
  */
 SHL_EXPORT
+void tsm_vte_set_str_ops(struct tsm_vte *vte,
+			 const struct tsm_vte_str_ops *ops, void *data)
+{
+	str_abort(vte);
+	vte->str_ops = ops;
+	vte->str_data = data;
+}
+
+SHL_EXPORT
 void tsm_vte_reset(struct tsm_vte *vte)
 {
+	str_abort(vte);
+	vte->str_len = 0;
 	vte->flags = 0;
 	vte->flags |= FLAG_TEXT_CURSOR_MODE;
 	vte->flags |= FLAG_AUTO_REPEAT_MODE;
@@ -695,12 +884,21 @@ static void do_clear(struct tsm_vte *vte)
 	for (i = 0; i < CSI_ARG_MAX; ++i)
 		vte->csi_argv[i] = -1;
 	vte->csi_flags = 0;
+	vte->str_marks = 0;
 
 	vte->osc_len = 0;
 }
 
 static void do_collect(struct tsm_vte *vte, uint32_t data)
 {
+	if (vte->state == STATE_DCS_ENTRY || vte->state == STATE_DCS_PARAM ||
+	    vte->state == STATE_DCS_INT) {
+		if (data >= 0x3c && data <= 0x3f)
+			vte->str_marks |= TSM_VTE_STR_PRIVATE;
+		else if (data >= 0x20 && data <= 0x2f)
+			vte->str_marks |= TSM_VTE_STR_INTERMEDIATE;
+	}
+
 	switch (data) {
 	case '!':
 		vte->csi_flags |= CSI_BANG;
@@ -1938,10 +2136,10 @@ static void do_action(struct tsm_vte *vte, uint32_t data, int action)
 			do_csi(vte, data);
 			break;
 		case ACTION_DCS_START:
+			str_start(vte, TSM_VTE_STR_DCS, data);
 			break;
-		case ACTION_DCS_COLLECT:
-			break;
-		case ACTION_DCS_END:
+		case ACTION_APC_START:
+			str_start(vte, TSM_VTE_STR_APC, 0);
 			break;
 		case ACTION_OSC_START:
 			do_clear(vte);
@@ -1962,6 +2160,7 @@ static const int entry_action[] = {
 	[STATE_CSI_ENTRY] = ACTION_CLEAR,
 	[STATE_DCS_ENTRY] = ACTION_CLEAR,
 	[STATE_DCS_PASS] = ACTION_DCS_START,
+	[STATE_APC_STRING] = ACTION_APC_START,
 	[STATE_ESC] = ACTION_CLEAR,
 	[STATE_OSC_STRING] = ACTION_OSC_START,
 	[STATE_NUM] = ACTION_NONE,
@@ -1969,7 +2168,6 @@ static const int entry_action[] = {
 
 /* exit actions to be performed when leaving the selected state */
 static const int exit_action[] = {
-	[STATE_DCS_PASS] = ACTION_DCS_END,
 	[STATE_OSC_STRING] = ACTION_OSC_END,
 	[STATE_NUM] = ACTION_NONE,
 };
@@ -1987,6 +2185,11 @@ static void do_trans(struct tsm_vte *vte, uint32_t data, int state, int act)
 		do_action(vte, data, act);
 		do_action(vte, data, entry_action[state]);
 		vte->state = state;
+		/* a string nobody wants is skipped up to its end */
+		if (state == STATE_DCS_PASS && !vte->str_open)
+			vte->state = STATE_DCS_IGNORE;
+		else if (state == STATE_APC_STRING && !vte->str_open)
+			vte->state = STATE_ST_IGNORE;
 	} else {
 		do_action(vte, data, act);
 	}
@@ -1999,6 +2202,9 @@ static void do_trans(struct tsm_vte *vte, uint32_t data, int state, int act)
  */
 static void parse_data(struct tsm_vte *vte, uint32_t raw)
 {
+	if (str_state(vte->state) && str_input(vte, raw))
+		return;
+
 	/* events that may occur in any state */
 	switch (raw) {
 		case 0x18:
@@ -2015,8 +2221,10 @@ static void parse_data(struct tsm_vte *vte, uint32_t raw)
 			return;
 		case 0x98:
 		case 0x9e:
-		case 0x9f:
 			do_trans(vte, raw, STATE_ST_IGNORE, ACTION_NONE);
+			return;
+		case 0x9f:
+			do_trans(vte, raw, STATE_APC_STRING, ACTION_NONE);
 			return;
 		case 0x90:
 			do_trans(vte, raw, STATE_DCS_ENTRY, ACTION_NONE);
@@ -2077,9 +2285,11 @@ static void parse_data(struct tsm_vte *vte, uint32_t raw)
 		case 0x50:
 			do_trans(vte, raw, STATE_DCS_ENTRY, ACTION_NONE);
 			return;
+		case 0x5f:
+			do_trans(vte, raw, STATE_APC_STRING, ACTION_NONE);
+			return;
 		case 0x58:
 		case 0x5e:
-		case 0x5f:
 			do_trans(vte, raw, STATE_ST_IGNORE, ACTION_NONE);
 			return;
 		}
@@ -2272,21 +2482,9 @@ static void parse_data(struct tsm_vte *vte, uint32_t raw)
 		do_trans(vte, raw, STATE_DCS_PASS, ACTION_NONE);
 		return;
 	case STATE_DCS_PASS:
-		switch (raw) {
-		case 0x00 ... 0x17:
-		case 0x19:
-		case 0x1c ... 0x1f:
-		case 0x20 ... 0x7e:
-			do_trans(vte, raw, STATE_NONE, ACTION_DCS_COLLECT);
-			return;
-		case 0x7f:
-			do_trans(vte, raw, STATE_NONE, ACTION_IGNORE);
-			return;
-		case 0x9c:
-			do_trans(vte, raw, STATE_GROUND, ACTION_NONE);
-			return;
-		}
-		do_trans(vte, raw, STATE_NONE, ACTION_DCS_COLLECT);
+	case STATE_APC_STRING:
+	case STATE_STR_ESC:
+		/* handled before the switch above */
 		return;
 	case STATE_DCS_IGNORE:
 		switch (raw) {
@@ -2348,6 +2546,26 @@ void tsm_vte_input(struct tsm_vte *vte, const char *u8, size_t len)
 
 	++vte->parse_cnt;
 	for (i = 0; i < len; ++i) {
+		/* Printable ASCII in a string goes through in one piece. The
+		 * UTF-8 machine is idle then, as a run starts with ASCII. */
+		if (u8[i] >= 0x20 && u8[i] <= 0x7e &&
+		    !(vte->flags & (FLAG_7BIT_MODE | FLAG_8BIT_MODE)) &&
+		    (vte->state == STATE_DCS_PASS ||
+		     vte->state == STATE_APC_STRING ||
+		     vte->state == STATE_DCS_IGNORE ||
+		     vte->state == STATE_ST_IGNORE) &&
+		    tsm_utf8_mach_idle(vte->mach)) {
+			size_t end = i + 1;
+
+			while (end < len && u8[end] >= 0x20 && u8[end] <= 0x7e)
+				end++;
+			if (vte->state == STATE_DCS_PASS ||
+			    vte->state == STATE_APC_STRING)
+				str_append(vte, u8 + i, end - i);
+			i = end - 1;
+			continue;
+		}
+
 		if (vte->flags & FLAG_7BIT_MODE) {
 			if (u8[i] & 0x80)
 				llog_debug(vte, "receiving 8bit character U+%d from pty while in 7bit mode",
