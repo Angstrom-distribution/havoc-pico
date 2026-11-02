@@ -617,12 +617,14 @@ static enum kitty_err put_placement(struct gfx *g, uint32_t h,
 	m->last_use = ++g->use;
 
 	if (c->C != 1) {
-		int down = np->rows - KITTY_CURSOR_ROWS_BACK;
+		/* np is not used past here: a scroll may delete placements
+		 * and move the others in the array */
+		int down = np->rows - KITTY_CURSOR_ROWS_BACK, cols = np->cols;
 
 		/* the scrolls move the placement with the text */
 		if (down > 0)
 			tsm_screen_move_down(g->scr, down, true);
-		tsm_screen_move_right(g->scr, np->cols);
+		tsm_screen_move_right(g->scr, cols);
 	}
 	return KITTY_OK;
 }
