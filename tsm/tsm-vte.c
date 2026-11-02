@@ -2099,7 +2099,10 @@ static int tokdec(char **rest, char delim)
 			return -1;
 		}
 
-		n = n * 10 + (c - '0');
+		/* every user of the number rejects one this large, and
+		 * growing it further would overflow */
+		if (n < 100000000)
+			n = n * 10 + (c - '0');
 	}
 
 	*rest = str + i;
@@ -2124,7 +2127,8 @@ static int tokhex(char **rest, char delim)
 			return -1;
 		}
 
-		n = n * 16 + 9 * (c >> 6) + (c & 0x0f);
+		if (n < 0x1000000)
+			n = n * 16 + 9 * (c >> 6) + (c & 0x0f);
 	}
 
 	*rest = str + i;

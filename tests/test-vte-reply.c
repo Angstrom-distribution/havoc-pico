@@ -176,6 +176,19 @@ static void test_reply_api(void)
 	t_free(&T);
 }
 
+/* OSC numbers too large for an int are refused, not wrapped: 4294967297
+ * would wrap to colour 1 */
+static void test_osc_numbers(void)
+{
+	t_new(&T, 40, 32);
+	REPLY("\033]4;1;?\a", "\033]4;1;rgb:CD/00/00\a");
+	REPLY("\033]4;4294967297;?\a", "");
+	REPLY("\033]4294967300;x\a", "");
+	t_in(&T, "\033]4;1;rgb:100000001/100000002/100000003\a");
+	REPLY("\033]4;1;?\a", "\033]4;1;rgb:CD/00/00\a");
+	t_free(&T);
+}
+
 int main(void)
 {
 	test_before();
@@ -183,5 +196,6 @@ int main(void)
 	test_no_sixel();
 	test_version_copy();
 	test_reply_api();
+	test_osc_numbers();
 	return t_summary("test-vte-reply");
 }
