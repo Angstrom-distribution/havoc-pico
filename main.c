@@ -2676,6 +2676,26 @@ static void font_config(char *key, char *val)
 			sizeof(term.cfg.font_pixel) - 1);
 }
 
+static void graphics_config(char *key, char *val)
+{
+	if (strcmp(key, "sixel") == 0) {
+#if HAVOC_SIXEL
+		term.cfg.gfx.sixel = strcmp(val, "yes") == 0;
+#else
+		if (strcmp(val, "yes") == 0)
+			fprintf(stderr, "[graphics] sixel is not built in\n");
+#endif
+	} else if (strcmp(key, "shm") == 0) {
+#if HAVE_GRAPHICS
+		term.cfg.gfx.shm = strcmp(val, "yes") == 0;
+#endif
+	} else if (strcmp(key, "max_pixels") == 0) {
+#if HAVE_GRAPHICS
+		term.cfg.gfx.max_pixels = cfg_num(val, 10, 0, 16777216);
+#endif
+	}
+}
+
 static void bind_config(char *key, char *val)
 {
 	unsigned int mods = 0;
@@ -2821,6 +2841,8 @@ static void read_config(void)
 				section = &terminal_config;
 			else if (strcmp(key, "font") == 0)
 				section = &font_config;
+			else if (strcmp(key, "graphics") == 0)
+				section = &graphics_config;
 			else if (strcmp(key, "bind") == 0)
 				section = &bind_config;
 			else if (strcmp(key, "colors") == 0)
