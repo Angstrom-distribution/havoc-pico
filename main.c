@@ -1082,16 +1082,27 @@ static void print1_over(uint32_t *dst, int vis, int k, u8 fr, u8 fg, u8 fb,
 {
 	uint32_t fgc = join(0xff, fr, fg, fb);
 	int h = term.cheight;
-	int y, x;
+	int y, x, ky = 0;
 
+	/* the zoom repeats each glyph pixel k times; counted, not divided,
+	 * since the target cores have no divide instruction */
 	vis *= term.cwidth;
 	for (y = 0; y < h; ++y) {
-		const uint8_t *r = rows + (y / k) * bpr;
+		int sx = 0, kx = 0;
 
-		for (x = 0; x < vis; ++x)
-			if (r[x / k >> 3] & 0x80 >> (x / k & 7))
+		for (x = 0; x < vis; ++x) {
+			if (rows[sx >> 3] & 0x80 >> (sx & 7))
 				dst[x] = fgc;
+			if (++kx == k) {
+				kx = 0;
+				sx++;
+			}
+		}
 		dst += term.width;
+		if (++ky == k) {
+			ky = 0;
+			rows += bpr;
+		}
 	}
 }
 
