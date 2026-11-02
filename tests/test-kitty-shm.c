@@ -7,6 +7,9 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if HAVOC_PNG
+#include <zlib.h>
+#endif
 #include "check.h"
 #include "kharness.h"
 #include "../kitty-shm.h"
@@ -220,6 +223,35 @@ int main(void)
 		CHECK(res[0].img.rgb[63] != 0);
 		clear_res();
 	}
+#if HAVOC_PNG
+	/* o=z from shared memory: S bounds what is read, so bytes after it in
+	 * the object do not count as data after the stream */
+	{
+		uint8_t zz[400];
+		uLongf zl = sizeof zz - 16;
+		char nb[600], line[800];
+
+		CHECK(compress(zz, &zl, px, sizeof px) == Z_OK);
+		memcpy(zz + zl, "trailing bytes", 14);
+		b64((const uint8_t *)name, strlen(name), nb);
+		fd = make(name, zz, zl + 14);
+		close(fd);
+		snprintf(line, sizeof line, "Ga=T,t=s,f=24,s=8,v=8,o=z,S=%lu,i=1;%s",
+			 (unsigned long)zl, nb);
+		CHECK(feed_apc(k, line, strlen(line), 0, false) == 1);
+		CHECK(res[0].err == KITTY_OK && res[0].img.w == 8 && !exists(name));
+		CHECK(res[0].img.rgb && res[0].img.rgb[63] ==
+		      ((px[189] >> 3) << 11 | (px[190] >> 2) << 5 | px[191] >> 3));
+		clear_res();
+		/* without S the whole object is read and the trailing bytes fail */
+		fd = make(name, zz, zl + 14);
+		close(fd);
+		snprintf(line, sizeof line, "Ga=T,t=s,f=24,s=8,v=8,o=z,i=1;%s", nb);
+		CHECK(feed_apc(k, line, strlen(line), 0, false) == 1);
+		CHECK(res[0].err == KITTY_ENODATA && !exists(name));
+		clear_res();
+	}
+#endif
 	/* too small for s * v */
 	fd = make(name, px, sizeof px);
 	close(fd);
