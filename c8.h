@@ -38,6 +38,11 @@ uint8_t c8_cube(uint32_t rgb);
 uint8_t c8_find(const struct c8_table *t, uint32_t rgb);
 /* the index for a colour, adding a slot when it needs one */
 uint8_t c8_get(struct c8_table *t, uint32_t rgb);
+/* The cube index for a picture pixel (0x00RRGGBB) dithered with a 4x4
+ * ordered pattern. phase is (y & 3) << 2 | (x & 3) with x and y counted from
+ * the picture's own corner, so the pattern moves with the picture. Never
+ * adds a slot. */
+uint8_t c8_dither(uint32_t rgb, unsigned int phase);
 /* the 256 entries of the palette, 0x00RRGGBB; unused slots are black */
 void c8_palette(const struct c8_table *t, uint32_t out[256]);
 /* the index of slot s (0 to C8_SLOTS - 1) */
