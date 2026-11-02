@@ -807,6 +807,7 @@ void tsm_vte_hard_reset(struct tsm_vte *vte)
 	tsm_screen_erase_screen(vte->con, false);
 	tsm_screen_clear_sb(vte->con);
 	tsm_screen_move_to(vte->con, 0, 0);
+	screen_emit_reset(vte->con);
 }
 
 static void send_primary_da(struct tsm_vte *vte)

@@ -67,6 +67,47 @@
 
 #define LLOG_SUBSYSTEM "tsm-screen"
 
+static void screen_emit(struct tsm_screen *con, enum tsm_screen_event_type type,
+			bool alt, int top, int bottom, int n, bool to_sb)
+{
+	struct tsm_screen_event ev = {
+		.type = type, .alt = alt, .top = top, .bottom = bottom,
+		.n = n, .to_sb = to_sb,
+	};
+
+	if (con->event_cb)
+		con->event_cb(con, &ev, con->event_data);
+}
+
+void screen_emit_reset(struct tsm_screen *con)
+{
+	screen_emit(con, TSM_SCREEN_EV_RESET, con->flags & TSM_SCREEN_ALTERNATE,
+		    0, 0, 0, false);
+}
+
+SHL_EXPORT
+void tsm_screen_set_event_cb(struct tsm_screen *con, tsm_screen_event_cb cb,
+			     void *data)
+{
+	con->event_cb = cb;
+	con->event_data = data;
+}
+
+SHL_EXPORT
+int tsm_screen_get_sb_count(struct tsm_screen *con)
+{
+	return con->sb_count;
+}
+
+SHL_EXPORT
+int tsm_screen_get_sb_offset(struct tsm_screen *con)
+{
+	if (!con->sb_pos)
+		return 0;
+
+	return con->sb_last->sb_id - con->sb_pos->sb_id + 1;
+}
+
 static struct cell *get_cursor_cell(struct tsm_screen *con)
 {
 	int cur_x, cur_y;
@@ -310,6 +351,10 @@ static void screen_scroll_up_(struct tsm_screen *con, int num)
 	memcpy(&con->lines[con->margin_top + (max - num)],
 	       cache, num * sizeof(struct line*));
 
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->margin_top, con->margin_bottom, num,
+		    !(con->flags & TSM_SCREEN_ALTERNATE) && con->sb_max > 0);
+
 	if (con->sel_active) {
 		if (!con->sel_start.line && con->sel_start.y >= 0) {
 			con->sel_start.y -= num;
@@ -378,6 +423,9 @@ static void screen_scroll_down_(struct tsm_screen *con, int num)
 
 	memcpy(&con->lines[con->margin_top],
 	       cache, num * sizeof(struct line*));
+
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->margin_top, con->margin_bottom, -num, false);
 
 	if (con->sel_active) {
 		if (!con->sel_start.line && con->sel_start.y >= 0)
@@ -801,6 +849,9 @@ void tsm_screen_clear_sb(struct tsm_screen *con)
 	con->sb_count = 0;
 	con->sb_pos = NULL;
 
+	screen_emit(con, TSM_SCREEN_EV_CLEAR_SB, con->flags & TSM_SCREEN_ALTERNATE,
+		    0, 0, 0, false);
+
 	if (con->sel_active) {
 		if (con->sel_start.line) {
 			con->sel_start.line = NULL;
@@ -916,10 +967,12 @@ SHL_EXPORT
 void tsm_screen_reset(struct tsm_screen *con)
 {
 	int i;
+	bool alt;
 
 	screen_inc_age(con);
 	con->age = con->age_cnt;
 
+	alt = con->flags & TSM_SCREEN_ALTERNATE;
 	con->flags = 0;
 	con->margin_top = 0;
 	con->margin_bottom = con->size_y - 1;
@@ -931,6 +984,10 @@ void tsm_screen_reset(struct tsm_screen *con)
 		else
 			con->tab_ruler[i] = false;
 	}
+
+	if (alt)
+		screen_emit(con, TSM_SCREEN_EV_ALTERNATE, false, 0, 0, 0,
+			    false);
 }
 
 SHL_EXPORT
@@ -954,6 +1011,7 @@ void tsm_screen_set_flags(struct tsm_screen *con, unsigned int flags)
 		       sizeof(con->main_def_attr));
 		memcpy(&con->def_attr, &con->alt_def_attr,
 		       sizeof(con->def_attr));
+		screen_emit(con, TSM_SCREEN_EV_ALTERNATE, true, 0, 0, 0, false);
 	}
 
 	if (!(old & TSM_SCREEN_HIDE_CURSOR) &&
@@ -987,6 +1045,8 @@ void tsm_screen_reset_flags(struct tsm_screen *con, unsigned int flags)
 		       sizeof(con->alt_def_attr));
 		memcpy(&con->def_attr, &con->main_def_attr,
 		       sizeof(con->def_attr));
+		screen_emit(con, TSM_SCREEN_EV_ALTERNATE, false, 0, 0, 0,
+			    false);
 	}
 
 	if ((old & TSM_SCREEN_HIDE_CURSOR) &&
@@ -1372,6 +1432,9 @@ void tsm_screen_insert_lines(struct tsm_screen *con, int num)
 		       cache, num * sizeof(struct line*));
 	}
 
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->cursor_y, con->margin_bottom, -num, false);
+
 	con->cursor_x = 0;
 }
 
@@ -1414,6 +1477,9 @@ void tsm_screen_delete_lines(struct tsm_screen *con, int num)
 		memcpy(&con->lines[con->cursor_y + (max - num)],
 		       cache, num * sizeof(struct line*));
 	}
+
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->cursor_y, con->margin_bottom, num, false);
 
 	con->cursor_x = 0;
 }
@@ -1592,6 +1658,9 @@ void tsm_screen_erase_screen(struct tsm_screen *con, bool protect)
 	screen_erase_region(con, 0, 0, con->size_x - 1, con->size_y - 1,
 			     protect);
 	con->vanguard = 0;
+
+	screen_emit(con, TSM_SCREEN_EV_ERASE_SCREEN,
+		    con->flags & TSM_SCREEN_ALTERNATE, 0, 0, 0, false);
 }
 
 SHL_EXPORT

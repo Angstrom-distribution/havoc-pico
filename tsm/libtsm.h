@@ -158,6 +158,36 @@ typedef bool (*tsm_picture_cb) (uint32_t ucs4);
 void tsm_screen_set_picture_cb(struct tsm_screen *con, tsm_picture_cb cb);
 void tsm_screen_clear_sb(struct tsm_screen *con);
 
+/* Changes that move or drop lines, for a consumer that keeps pictures
+ * outside the cells. The callback runs after the change. */
+enum tsm_screen_event_type {
+	TSM_SCREEN_EV_SCROLL,		/* rows top..bottom moved by n */
+	TSM_SCREEN_EV_ERASE_SCREEN,	/* tsm_screen_erase_screen */
+	TSM_SCREEN_EV_CLEAR_SB,		/* tsm_screen_clear_sb */
+	TSM_SCREEN_EV_ALTERNATE,	/* the other screen is active now */
+	TSM_SCREEN_EV_RESET,		/* tsm_vte_hard_reset, after its erases */
+};
+
+struct tsm_screen_event {
+	enum tsm_screen_event_type type;
+	bool alt;	/* the screen it happened on; ALTERNATE: the one now active */
+	int top, bottom;	/* SCROLL: rows, inclusive, before the move */
+	int n;		/* SCROLL: > 0 up (towards the scrollback), < 0 down */
+	bool to_sb;	/* SCROLL up: the rows that left at the top went into
+			 * the scrollback (main screen); else they were dropped */
+};
+
+typedef void (*tsm_screen_event_cb)(struct tsm_screen *con,
+				    const struct tsm_screen_event *ev,
+				    void *data);
+void tsm_screen_set_event_cb(struct tsm_screen *con, tsm_screen_event_cb cb,
+			     void *data);
+
+int tsm_screen_get_sb_count(struct tsm_screen *con);
+/* scrollback lines shown above the screen's first row: 0 unless scrolled
+ * back; sb_last->sb_id - sb_pos->sb_id + 1 */
+int tsm_screen_get_sb_offset(struct tsm_screen *con);
+
 void tsm_screen_sb_up(struct tsm_screen *con, int num);
 void tsm_screen_sb_down(struct tsm_screen *con, int num);
 void tsm_screen_sb_page_up(struct tsm_screen *con, int num);
