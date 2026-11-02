@@ -7,6 +7,6 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 SAN="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
-gcc -g -O1 -Wall -Wextra -Werror -Wno-unused-parameter $SAN -I"$top" \
+gcc -g -O1 -Wall -Wextra -Werror -Wno-unused-parameter $SAN -DHAVOC_SIXEL=1 -I"$top" \
 	-o "$tmp/c8" "$top/tests/test-c8-dither.c" "$top/c8.c"
 "$tmp/c8"

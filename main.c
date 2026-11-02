@@ -791,8 +791,7 @@ typedef uint32_t u32;
 #define mul(a, b) (((u32)(a) * (u32)(b) + 255) >> 8)
 #define join(a, r, g, b) ((u32)(a) << 24 | (u32)(r) << 16 | (u32)(g) << 8 | (u32)(b))
 
-static void blank_to(uint32_t *dst, int stride, int w, u8 br, u8 bg, u8 bb,
-		     u8 ba)
+static void blank(uint32_t *dst, int w, u8 br, u8 bg, u8 bb, u8 ba)
 {
 	int i;
 	uint32_t b;
@@ -804,13 +803,8 @@ static void blank_to(uint32_t *dst, int stride, int w, u8 br, u8 bg, u8 bb,
 	while (h--) {
 		for (i = 0; i < w; ++i)
 			dst[i] = b;
-		dst += stride;
+		dst += term.width;
 	}
-}
-
-static void blank(uint32_t *dst, int w, u8 br, u8 bg, u8 bb, u8 ba)
-{
-	blank_to(dst, term.width, w, br, bg, bb, ba);
 }
 
 /* Only vis of the w cells of the glyph fit before the right edge of the grid;
@@ -1043,6 +1037,25 @@ static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
 }
 
 #if HAVE_GRAPHICS
+/* blank in a target of any stride; blank itself stays as it was, so that a
+ * build without pictures is unchanged */
+static void blank_to(uint32_t *dst, int stride, int w, u8 br, u8 bg, u8 bb,
+		     u8 ba)
+{
+	int i;
+	uint32_t b;
+	int h = term.cheight;
+
+	b = join(ba, mul(br, ba), mul(bg, ba), mul(bb, ba));
+	w *= term.cwidth;
+
+	while (h--) {
+		for (i = 0; i < w; ++i)
+			dst[i] = b;
+		dst += stride;
+	}
+}
+
 /* The glyph of a cell over what is there: only the pixels the glyph sets,
  * blended by the outline font's coverage. */
 static void print_over(uint32_t *dst, int stride, int w, int vis, u8 fr, u8 fg,

@@ -88,6 +88,7 @@ void c8_palette(const struct c8_table *t, uint32_t out[256])
 		out[c8_slot_index(i)] = t->rgb[i];
 }
 
+#if HAVOC_SIXEL || HAVOC_KITTY
 /* Ordered dither of a picture pixel to the cube. The tables are built on
  * the first call, the only place that divides; a pixel costs three lookups
  * and three compares. Per channel v: lo[v] is the highest level index with
@@ -134,3 +135,4 @@ uint8_t c8_dither(uint32_t rgb, unsigned int phase)
 	b = dlo[b] + (dfrac[b] > th);
 	return 16 + 36 * r + 6 * g + b;
 }
+#endif
