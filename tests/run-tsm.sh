@@ -3,15 +3,20 @@
 # Run it in the container, from anywhere:  sh tests/run-tsm.sh
 #
 # PICO_TSM    tsm/ directory of the unchanged pico branch, for test-vte-same
-#             (default /s/havoc-pico-work/plan-baseline/tsm)
+#             (default: tsm/ of the git revision PICO_REF, origin/pico)
 # VECTORS     directory with captured terminal streams for test-vte-same
 # FUZZ_SECONDS  length of the fuzzer run, 0 to skip it (default 60)
 
 top=$(cd "$(dirname "$0")/.." && pwd)
-PICO_TSM=${PICO_TSM:-/s/havoc-pico-work/plan-baseline/tsm}
 FUZZ_SECONDS=${FUZZ_SECONDS:-60}
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
+if [ -z "${PICO_TSM:-}" ]; then
+	mkdir "$tmp/pico-src"
+	git -C "$top" archive "${PICO_REF:-origin/pico}" tsm | tar -x -C "$tmp/pico-src" ||
+		{ echo "run-tsm: no tsm/ of ${PICO_REF:-origin/pico}; set PICO_TSM or PICO_REF" >&2; exit 1; }
+	PICO_TSM=$tmp/pico-src/tsm
+fi
 
 checks=0
 failed=0
@@ -116,7 +121,7 @@ if [ "$FUZZ_SECONDS" -gt 0 ] && command -v clang >/dev/null; then
 				grep "stat::number_of_executed_units" "$tmp/fuzz.log"
 			else
 				tail -30 "$tmp/fuzz.log" >&2
-				cp "$tmp"/crash-* /s/havoc-pico-work/ 2>/dev/null
+				cp "$tmp"/crash-* . 2>/dev/null
 				fail "fuzz-vte-str HAVOC_SIXEL=$d"
 			fi
 			checks=$((checks + 1))
