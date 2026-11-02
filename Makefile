@@ -18,11 +18,36 @@ PALETTE_GEN = picowl-palette-v1.h picowl-palette-v1.c
 PALETTE_OBJ = picowl-palette-v1.o
 PALETTE_DEFS = -DHAVE_PICOWL_PALETTE
 endif
-CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"' $(PALETTE_DEFS)
+# Pictures in the terminal: sixel (DCS q) and a subset of the kitty graphics
+# protocol (APC G). HAVOC_PNG adds PNG (f=100) and zlib (o=z) to kitty with
+# libpng. Each is also off at run time until [graphics] turns it on.
+HAVOC_SIXEL ?= 0
+HAVOC_KITTY ?= 0
+HAVOC_PNG ?= 0
+GFX_DEFS = -DHAVOC_SIXEL=$(HAVOC_SIXEL) -DHAVOC_KITTY=$(HAVOC_KITTY) -DHAVOC_PNG=$(HAVOC_PNG)
+GFX_LIBS =
+GFX_OBJ =
+ifneq ($(HAVOC_SIXEL)$(HAVOC_KITTY),00)
+GFX_OBJ += graphics.o
+endif
+ifeq ($(HAVOC_SIXEL),1)
+GFX_OBJ += sixel.o
+endif
+ifeq ($(HAVOC_KITTY),1)
+GFX_OBJ += kitty.o kplace.o base64.o kitty-shm.o
+endif
+ifeq ($(HAVOC_PNG),1)
+ifneq ($(HAVOC_KITTY),1)
+$(error HAVOC_PNG=1 needs HAVOC_KITTY=1)
+endif
+GFX_OBJ += kitty-png.o
+GFX_LIBS = libpng zlib
+endif
+CDEFS = -DVERSION='$(VERSION)' -D_XOPEN_SOURCE=700 -DEMOJI_DIR='"$(EMOJI_DIR)"' $(PALETTE_DEFS) $(GFX_DEFS)
 
 WAYLAND_PROTOCOLS_DIR != $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols
 
-LIBRARIES = wayland-client wayland-cursor xkbcommon
+LIBRARIES = wayland-client wayland-cursor xkbcommon $(GFX_LIBS)
 PKG_CFLAGS != $(PKG_CONFIG) --cflags $(LIBRARIES)
 PKG_LIBS != $(PKG_CONFIG) --libs $(LIBRARIES)
 
@@ -65,6 +90,7 @@ OBJ = \
 	fractional-scale-v1.o \
 	text-input-unstable-v3.o \
 	$(PALETTE_OBJ) \
+	$(GFX_OBJ) \
 	tsm/wcwidth.o \
 	tsm/shl-htable.o \
 	tsm/tsm-render.o \
@@ -120,6 +146,6 @@ uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
 
 clean:
-	rm -f havoc $(XML) $(GEN) $(OBJ) picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
+	rm -f havoc $(XML) $(GEN) $(OBJ) graphics.o sixel.o kitty.o kplace.o base64.o kitty-shm.o kitty-png.o picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
 
 .PHONY: install uninstall clean

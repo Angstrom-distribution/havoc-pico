@@ -75,6 +75,8 @@ void tsm_utf8_mach_free(struct tsm_utf8_mach *mach);
 int tsm_utf8_mach_feed(struct tsm_utf8_mach *mach, char c);
 uint32_t tsm_utf8_mach_get(struct tsm_utf8_mach *mach);
 void tsm_utf8_mach_reset(struct tsm_utf8_mach *mach);
+/* true when no multi-byte sequence is half read */
+bool tsm_utf8_mach_idle(struct tsm_utf8_mach *mach);
 
 /* TSM screen */
 
@@ -93,6 +95,9 @@ struct line {
 	struct cell *cells;		/* actuall cells */
 	uint64_t sb_id;			/* sb ID */
 	tsm_age_t age;			/* age of the whole line */
+#if HAVOC_SIXEL
+	unsigned int has_pic : 1;	/* some cell may hold a picture tile */
+#endif
 };
 
 #define SELECTION_TOP -1
@@ -145,6 +150,10 @@ struct tsm_screen {
 	/* code points drawn as two-cell pictures, or NULL */
 	tsm_picture_cb picture_cb;
 
+	/* line moves and screen changes, or NULL */
+	tsm_screen_event_cb event_cb;
+	void *event_data;
+
 	/* color palette */
 	uint8_t palette[256][3];
 	uint8_t foreground[3];
@@ -165,6 +174,7 @@ struct tsm_screen {
 
 void screen_cell_init(struct tsm_screen *con, struct cell *cell,
 		      struct tsm_screen_attr *attr);
+void screen_emit_reset(struct tsm_screen *con);
 
 void tsm_screen_set_opts(struct tsm_screen *scr, unsigned int opts);
 void tsm_screen_reset_opts(struct tsm_screen *scr, unsigned int opts);

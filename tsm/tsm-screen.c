@@ -67,6 +67,47 @@
 
 #define LLOG_SUBSYSTEM "tsm-screen"
 
+static void screen_emit(struct tsm_screen *con, enum tsm_screen_event_type type,
+			bool alt, int top, int bottom, int n, bool to_sb)
+{
+	struct tsm_screen_event ev = {
+		.type = type, .alt = alt, .top = top, .bottom = bottom,
+		.n = n, .to_sb = to_sb,
+	};
+
+	if (con->event_cb)
+		con->event_cb(con, &ev, con->event_data);
+}
+
+void screen_emit_reset(struct tsm_screen *con)
+{
+	screen_emit(con, TSM_SCREEN_EV_RESET, con->flags & TSM_SCREEN_ALTERNATE,
+		    0, 0, 0, false);
+}
+
+SHL_EXPORT
+void tsm_screen_set_event_cb(struct tsm_screen *con, tsm_screen_event_cb cb,
+			     void *data)
+{
+	con->event_cb = cb;
+	con->event_data = data;
+}
+
+SHL_EXPORT
+int tsm_screen_get_sb_count(struct tsm_screen *con)
+{
+	return con->sb_count;
+}
+
+SHL_EXPORT
+int tsm_screen_get_sb_offset(struct tsm_screen *con)
+{
+	if (!con->sb_pos)
+		return 0;
+
+	return con->sb_last->sb_id - con->sb_pos->sb_id + 1;
+}
+
 static struct cell *get_cursor_cell(struct tsm_screen *con)
 {
 	int cur_x, cur_y;
@@ -119,6 +160,21 @@ void screen_cell_init(struct tsm_screen *con, struct cell *cell,
 	memcpy(&cell->attr, attr, sizeof(cell->attr));
 }
 
+#if HAVOC_SIXEL
+/* A line taken for new text has its cells up to size_x reset. Cells right
+ * of a narrower screen keep their text, as before, but lose their tiles:
+ * with has_pic cleared the sweep would no longer see them, and they would
+ * name a freed slot when the screen widens again. */
+static void line_reused(struct tsm_screen *con, struct line *line)
+{
+	int x;
+
+	for (x = con->size_x; x < line->size; x++)
+		line->cells[x].attr.pic = 0;
+	line->has_pic = 0;
+}
+#endif
+
 static int line_new(struct tsm_screen *con, struct line **out, int width,
 		    struct tsm_screen_attr *attr)
 {
@@ -135,6 +191,9 @@ static int line_new(struct tsm_screen *con, struct line **out, int width,
 	line->prev = NULL;
 	line->size = width;
 	line->age = con->age_cnt;
+#if HAVOC_SIXEL
+	line->has_pic = 0;
+#endif
 
 	line->cells = malloc(sizeof(struct cell) * width);
 	if (!line->cells) {
@@ -295,6 +354,9 @@ static void screen_scroll_up_(struct tsm_screen *con, int num)
 			for (j = 0; j < con->size_x; ++j)
 				screen_cell_init(con, &cache[i]->cells[j],
 						 &con->def_attr);
+#if HAVOC_SIXEL
+			line_reused(con, cache[i]);
+#endif
 		}
 		con->vanguard--;
 	}
@@ -309,6 +371,10 @@ static void screen_scroll_up_(struct tsm_screen *con, int num)
 
 	memcpy(&con->lines[con->margin_top + (max - num)],
 	       cache, num * sizeof(struct line*));
+
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->margin_top, con->margin_bottom, num,
+		    !(con->flags & TSM_SCREEN_ALTERNATE) && con->sb_max > 0);
 
 	if (con->sel_active) {
 		if (!con->sel_start.line && con->sel_start.y >= 0) {
@@ -365,6 +431,9 @@ static void screen_scroll_down_(struct tsm_screen *con, int num)
 		for (j = 0; j < con->size_x; ++j)
 			screen_cell_init(con, &cache[i]->cells[j],
 					 &con->def_attr);
+#if HAVOC_SIXEL
+		line_reused(con, cache[i]);
+#endif
 		con->vanguard++;
 	}
 	if (con->vanguard >= con->size_y)
@@ -378,6 +447,9 @@ static void screen_scroll_down_(struct tsm_screen *con, int num)
 
 	memcpy(&con->lines[con->margin_top],
 	       cache, num * sizeof(struct line*));
+
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->margin_top, con->margin_bottom, -num, false);
 
 	if (con->sel_active) {
 		if (!con->sel_start.line && con->sel_start.y >= 0)
@@ -423,6 +495,9 @@ static void screen_write(struct tsm_screen *con, int x, int y, tsm_symbol_t ch,
 	for (i = 1; i < len && i + x < con->size_x; ++i) {
 		line->cells[x + i].age = con->age_cnt;
 		line->cells[x + i].width = 0;
+#if HAVOC_SIXEL
+		line->cells[x + i].attr.pic = 0;
+#endif
 	}
 
 	if (y > con->vanguard)
@@ -801,6 +876,9 @@ void tsm_screen_clear_sb(struct tsm_screen *con)
 	con->sb_count = 0;
 	con->sb_pos = NULL;
 
+	screen_emit(con, TSM_SCREEN_EV_CLEAR_SB, con->flags & TSM_SCREEN_ALTERNATE,
+		    0, 0, 0, false);
+
 	if (con->sel_active) {
 		if (con->sel_start.line) {
 			con->sel_start.line = NULL;
@@ -916,10 +994,12 @@ SHL_EXPORT
 void tsm_screen_reset(struct tsm_screen *con)
 {
 	int i;
+	bool alt;
 
 	screen_inc_age(con);
 	con->age = con->age_cnt;
 
+	alt = con->flags & TSM_SCREEN_ALTERNATE;
 	con->flags = 0;
 	con->margin_top = 0;
 	con->margin_bottom = con->size_y - 1;
@@ -931,6 +1011,10 @@ void tsm_screen_reset(struct tsm_screen *con)
 		else
 			con->tab_ruler[i] = false;
 	}
+
+	if (alt)
+		screen_emit(con, TSM_SCREEN_EV_ALTERNATE, false, 0, 0, 0,
+			    false);
 }
 
 SHL_EXPORT
@@ -954,6 +1038,7 @@ void tsm_screen_set_flags(struct tsm_screen *con, unsigned int flags)
 		       sizeof(con->main_def_attr));
 		memcpy(&con->def_attr, &con->alt_def_attr,
 		       sizeof(con->def_attr));
+		screen_emit(con, TSM_SCREEN_EV_ALTERNATE, true, 0, 0, 0, false);
 	}
 
 	if (!(old & TSM_SCREEN_HIDE_CURSOR) &&
@@ -987,6 +1072,8 @@ void tsm_screen_reset_flags(struct tsm_screen *con, unsigned int flags)
 		       sizeof(con->alt_def_attr));
 		memcpy(&con->def_attr, &con->main_def_attr,
 		       sizeof(con->def_attr));
+		screen_emit(con, TSM_SCREEN_EV_ALTERNATE, false, 0, 0, 0,
+			    false);
 	}
 
 	if ((old & TSM_SCREEN_HIDE_CURSOR) &&
@@ -1359,6 +1446,9 @@ void tsm_screen_insert_lines(struct tsm_screen *con, int num)
 		for (j = 0; j < con->size_x; ++j)
 			screen_cell_init(con, &cache[i]->cells[j],
 					 &con->def_attr);
+#if HAVOC_SIXEL
+		line_reused(con, cache[i]);
+#endif
 		if (con->cursor_y < con->vanguard)
 			con->vanguard++;
 	}
@@ -1371,6 +1461,9 @@ void tsm_screen_insert_lines(struct tsm_screen *con, int num)
 		memcpy(&con->lines[con->cursor_y],
 		       cache, num * sizeof(struct line*));
 	}
+
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->cursor_y, con->margin_bottom, -num, false);
 
 	con->cursor_x = 0;
 }
@@ -1402,6 +1495,9 @@ void tsm_screen_delete_lines(struct tsm_screen *con, int num)
 		for (j = 0; j < con->size_x; ++j)
 			screen_cell_init(con, &cache[i]->cells[j],
 					 &con->def_attr);
+#if HAVOC_SIXEL
+		line_reused(con, cache[i]);
+#endif
 		if (con->cursor_y <= con->vanguard)
 			con->vanguard--;
 	}
@@ -1414,6 +1510,9 @@ void tsm_screen_delete_lines(struct tsm_screen *con, int num)
 		memcpy(&con->lines[con->cursor_y + (max - num)],
 		       cache, num * sizeof(struct line*));
 	}
+
+	screen_emit(con, TSM_SCREEN_EV_SCROLL, con->flags & TSM_SCREEN_ALTERNATE,
+		    con->cursor_y, con->margin_bottom, num, false);
 
 	con->cursor_x = 0;
 }
@@ -1592,6 +1691,9 @@ void tsm_screen_erase_screen(struct tsm_screen *con, bool protect)
 	screen_erase_region(con, 0, 0, con->size_x - 1, con->size_y - 1,
 			     protect);
 	con->vanguard = 0;
+
+	screen_emit(con, TSM_SCREEN_EV_ERASE_SCREEN,
+		    con->flags & TSM_SCREEN_ALTERNATE, 0, 0, 0, false);
 }
 
 SHL_EXPORT
@@ -1633,3 +1735,179 @@ uint8_t *tsm_screen_get_background(struct tsm_screen *con)
 {
 	return con->background;
 }
+
+#if HAVOC_SIXEL
+
+static void blank_cell(struct tsm_screen *con, struct cell *cell)
+{
+	screen_cell_init(con, cell, &con->def_attr);
+}
+
+SHL_EXPORT
+int tsm_screen_place_picture(struct tsm_screen *con,
+			     const struct tsm_screen_attr *attr,
+			     unsigned int slot, int cols, int rows,
+			     int cursor_row, unsigned int flags)
+{
+	struct tsm_screen_attr a;
+	struct line *line;
+	struct cell *cells;
+	int x0, n, r, c, y, lowest, target;
+
+	if (slot < 1 || slot > 255 || cols < 1 || cols > TSM_PIC_MAX ||
+	    rows < 1 || rows > TSM_PIC_MAX)
+		return -EINVAL;
+
+	screen_inc_age(con);
+	con->age = con->age_cnt;
+
+	/* a pending wrap goes first */
+	if (con->cursor_x >= con->size_x) {
+		if (con->flags & TSM_SCREEN_AUTO_WRAP) {
+			tsm_screen_move_down(con, 1, true);
+			move_cursor(con, 0, con->cursor_y);
+		} else {
+			move_cursor(con, con->size_x - 1, con->cursor_y);
+		}
+	}
+
+	x0 = con->cursor_x;
+	n = con->size_x - x0;
+	if (n > cols)
+		n = cols;
+	lowest = con->cursor_y >= con->margin_top &&
+		 con->cursor_y <= con->margin_bottom ? con->margin_top : 0;
+
+	memcpy(&a, attr, sizeof(a));
+	for (r = 0; r < rows; r++) {
+		if (r)
+			tsm_screen_move_down(con, 1, true);
+		y = con->cursor_y;
+		line = con->lines[y];
+		cells = line->cells;
+
+		/* never leave half of a wide character */
+		if (x0 > 0 && cells[x0].width == 0)
+			blank_cell(con, &cells[x0 - 1]);
+		if (x0 + n < con->size_x && cells[x0 + n - 1].width == 2)
+			blank_cell(con, &cells[x0 + n]);
+
+		for (c = 0; c < n; c++) {
+			a.pic = TSM_PIC(slot, c, r);
+			screen_cell_init(con, &cells[x0 + c], &a);
+		}
+		line->has_pic = 1;
+		line->age = con->age_cnt;
+		if (y > con->vanguard)
+			con->vanguard = y;
+	}
+
+	if (cursor_row < 0)
+		cursor_row = 0;
+	if (cursor_row > rows - 1)
+		cursor_row = rows - 1;
+	target = con->cursor_y - (rows - 1 - cursor_row);
+	if (target < lowest)
+		target = lowest;
+
+	move_cursor(con, x0, target);
+	if (flags & TSM_PIC_CURSOR_RIGHT) {
+		if (x0 + n >= con->size_x) {
+			tsm_screen_move_down(con, 1, true);
+			move_cursor(con, 0, con->cursor_y);
+		} else {
+			move_cursor(con, x0 + n, con->cursor_y);
+		}
+	}
+	return 0;
+}
+
+static void pictures_in_line(struct line *line, uint8_t used[32])
+{
+	bool any = false;
+	uint32_t slot;
+	int x;
+
+	if (!line->has_pic)
+		return;
+
+	for (x = 0; x < line->size; x++) {
+		if (!line->cells[x].attr.pic)
+			continue;
+		slot = TSM_PIC_SLOT(line->cells[x].attr.pic);
+		used[slot / 8] |= 1 << (slot % 8);
+		any = true;
+	}
+	if (!any)
+		line->has_pic = 0;
+}
+
+SHL_EXPORT
+void tsm_screen_pictures_used(struct tsm_screen *con,
+			      uint8_t used[TSM_PIC_SETS][32])
+{
+	struct line *iter;
+	int i, k;
+
+	memset(used, 0, TSM_PIC_SETS * 32);
+
+	for (i = 0; i < con->line_num; i++) {
+		pictures_in_line(con->main_lines[i], used[TSM_PIC_MAIN]);
+		pictures_in_line(con->alt_lines[i], used[TSM_PIC_ALT]);
+	}
+	for (iter = con->sb_first; iter; iter = iter->next)
+		pictures_in_line(iter, used[TSM_PIC_SB]);
+
+	/* the rows tsm_screen_draw() shows */
+	iter = con->sb_pos;
+	k = 0;
+	for (i = 0; i < con->size_y; i++) {
+		if (iter) {
+			pictures_in_line(iter, used[TSM_PIC_VIEW]);
+			iter = iter->next;
+		} else {
+			pictures_in_line(con->lines[k++], used[TSM_PIC_VIEW]);
+		}
+	}
+}
+
+static void drop_in_line(struct line *line, unsigned int slot)
+{
+	bool any = false;
+	int x;
+
+	if (!line->has_pic)
+		return;
+
+	for (x = 0; x < line->size; x++) {
+		if (!line->cells[x].attr.pic)
+			continue;
+		if (TSM_PIC_SLOT(line->cells[x].attr.pic) == slot) {
+			line->cells[x].attr.pic = 0;
+			line->cells[x].age = 0;
+		} else {
+			any = true;
+		}
+	}
+	if (!any)
+		line->has_pic = 0;
+}
+
+SHL_EXPORT
+void tsm_screen_drop_picture(struct tsm_screen *con, unsigned int slot)
+{
+	struct line *iter;
+	int i;
+
+	for (i = 0; i < con->line_num; i++) {
+		drop_in_line(con->main_lines[i], slot);
+		drop_in_line(con->alt_lines[i], slot);
+	}
+	for (iter = con->sb_first; iter; iter = iter->next)
+		drop_in_line(iter, slot);
+
+	screen_inc_age(con);
+	con->age = con->age_cnt;
+}
+
+#endif /* HAVOC_SIXEL */

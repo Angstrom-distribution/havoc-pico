@@ -30,6 +30,7 @@
 #include "emoji.h"
 #include "pixfont.h"
 #include "c8.h"
+#include "graphics.h"
 #ifdef HAVE_PICOWL_PALETTE
 #include "picowl-palette-v1.h"
 #else
@@ -69,8 +70,37 @@ struct cell_key {
 	/* drawn from an emoji pack: whether it is depends on the pack and the
 	 * cell size, not only on the character */
 	uint8_t picture;
+#if HAVE_GRAPHICS
+	/* only on a cell with a picture: KF_* */
+	uint8_t kflags;
+	uint8_t pad;
+#else
 	uint8_t pad[2];
+#endif
+#if HAVOC_SIXEL
+	/* the sixel tile and which picture it is (a slot is reused for
+	 * another one) */
+	uint32_t pic, pgen;
+#endif
+#if HAVOC_KITTY
+	/* a hash of the kitty placements over the cell, 0: none */
+	uint32_t klayer;
+#endif
 };
+
+#if HAVE_GRAPHICS
+#define KF_INV 0x01	/* composed with plain colours, drawn inverted (cursor, selection) */
+#define KF_DEFBG 0x02	/* the background is the default one */
+#endif
+#if HAVOC_SIXEL && HAVOC_KITTY
+_Static_assert(sizeof(struct cell_key) == 28, "cell_key has padding");
+#elif HAVOC_SIXEL
+_Static_assert(sizeof(struct cell_key) == 24, "cell_key has padding");
+#elif HAVOC_KITTY
+_Static_assert(sizeof(struct cell_key) == 20, "cell_key has padding");
+#else
+_Static_assert(sizeof(struct cell_key) == 16, "cell_key has padding");
+#endif
 
 enum {
 	CELL_PAINT = 1,
@@ -135,6 +165,11 @@ static struct {
 	struct cell_key *cur, *shown;
 	uint32_t *cur_ch;
 	uint8_t *flags;
+#if HAVOC_KITTY
+	/* kitty placements over each cell and which layers (gfx_frame) */
+	uint32_t *klayer;
+	uint8_t *lmask;
+#endif
 	bool shown_valid;
 	uint32_t shown_margin;
 	bool full_redraw;
@@ -150,6 +185,11 @@ static struct {
 
 	struct tsm_screen *screen;
 	struct tsm_vte *vte;
+#if HAVE_GRAPHICS
+	struct gfx *gfx;
+	/* the pixel size last given to the pty */
+	unsigned int ws_xpixel, ws_ypixel;
+#endif
 	unsigned int mods;
 
 	struct xkb_context *xkb_ctx;
@@ -257,6 +297,9 @@ static struct {
 		int font_size;
 		char font_path[512];
 		char font_pixel[16];
+#if HAVE_GRAPHICS
+		struct gfx_config gfx;
+#endif
 	} cfg;
 } term = {
 	.scale = 120,
@@ -273,6 +316,9 @@ static struct {
 	.cfg.font_size = 18,
 	.cfg.font_path = "",
 	.cfg.font_pixel = "",
+#if HAVE_GRAPHICS
+	.cfg.gfx.memory = 524288,
+#endif
 	.opt.app_id = "havoc"
 };
 
@@ -302,10 +348,18 @@ static void handle_tty(int ev)
 	int len = 0;
 
 	if (ev & POLLIN) {
+#if HAVE_GRAPHICS
+		/* a picture is many bytes: fewer reads and redraws while one
+		 * arrives; with pictures off the reads stay as they were */
+		char data[4096];
+		size_t size = gfx_enabled(term.gfx) ? sizeof(data) : 256;
+#else
 		char data[256];
+		size_t size = sizeof(data);
+#endif
 
 		term.need_redraw = true;
-		len = read(term.master_fd, data, sizeof(data));
+		len = read(term.master_fd, data, size);
 
 		if (len < 0) {
 			error("could not read from pty");
@@ -835,6 +889,41 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 
 	memset(k, 0, sizeof(*k));
 	k->width = char_width;
+#if HAVE_GRAPHICS
+	{
+		uint32_t kl = 0;
+
+#if HAVOC_KITTY
+		kl = term.klayer ? term.klayer[i] : 0;
+		k->klayer = kl;
+#endif
+#if HAVOC_SIXEL
+		if (a->pic) {
+			k->pic = a->pic;
+			k->pgen = gfx_pic_gen(term.gfx, a->pic);
+		}
+#endif
+		if (kl
+#if HAVOC_SIXEL
+		    || a->pic
+#endif
+		    ) {
+			/* a cell with a picture is composed with the plain
+			 * colours and inverted as a whole, so that the
+			 * picture inverts too */
+			k->kflags = a->inverse ? KF_INV : 0;
+			if (kl) {
+				const uint8_t *bg =
+					tsm_screen_get_background(term.screen);
+
+				if (a->br == bg[0] && a->bg == bg[1] &&
+				    a->bb == bg[2])
+					k->kflags |= KF_DEFBG;
+			}
+			inv = 0;
+		}
+	}
+#endif
 	k->bg = join(0, a->br ^ inv, a->bg ^ inv, a->bb ^ inv);
 	/* a blank cell has no foreground, so the colour must not tell two
 	 * of them apart; the second half of a wide cell is blank for the
@@ -947,6 +1036,283 @@ static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
 	}
 }
 
+#if HAVE_GRAPHICS
+/* blank in a target of any stride; blank itself stays as it was, so that a
+ * build without pictures is unchanged */
+static void blank_to(uint32_t *dst, int stride, int w, u8 br, u8 bg, u8 bb,
+		     u8 ba)
+{
+	int i;
+	uint32_t b;
+	int h = term.cheight;
+
+	b = join(ba, mul(br, ba), mul(bg, ba), mul(bb, ba));
+	w *= term.cwidth;
+
+	while (h--) {
+		for (i = 0; i < w; ++i)
+			dst[i] = b;
+		dst += stride;
+	}
+}
+
+/* The glyph of a cell over what is there: only the pixels the glyph sets,
+ * blended by the outline font's coverage. */
+static void print_over(uint32_t *dst, int stride, int w, int vis, u8 fr, u8 fg,
+		       u8 fb, const unsigned char *glyph)
+{
+	int i;
+	int h = term.cheight;
+
+	w *= term.cwidth;
+	vis *= term.cwidth;
+	while (h--) {
+		for (i = 0; i < vis; ++i) {
+			u8 fa = glyph[i];
+
+			if (fa == 0) {
+				continue;
+			} else if (fa == 0xff) {
+				dst[i] = join(0xff, fr, fg, fb);
+			} else {
+				u8 ca = 255 - fa;
+				uint32_t d = dst[i];
+				uint32_t a = fa + mul(d >> 24, ca);
+				uint32_t r = mul(fr, fa) + mul(d >> 16 & 255, ca);
+				uint32_t g = mul(fg, fa) + mul(d >> 8 & 255, ca);
+				uint32_t b = mul(fb, fa) + mul(d & 255, ca);
+
+				dst[i] = join(a > 255 ? 255 : a,
+					      r > 255 ? 255 : r,
+					      g > 255 ? 255 : g,
+					      b > 255 ? 255 : b);
+			}
+		}
+
+		glyph += w;
+		dst += stride;
+	}
+}
+
+/* ph: the dither phases of a C8 window's scratch (NULL otherwise); a pixel
+ * of the glyph is plain text there. */
+static void print1_over(uint32_t *dst, int stride, uint8_t *ph, int pstride,
+			int vis, int k, u8 fr, u8 fg, u8 fb,
+			const uint8_t *rows, int bpr)
+{
+	uint32_t fgc = join(0xff, fr, fg, fb);
+	int h = term.cheight;
+	int y, x, ky = 0;
+
+	/* the zoom repeats each glyph pixel k times; counted, not divided,
+	 * since the target cores have no divide instruction */
+	vis *= term.cwidth;
+	for (y = 0; y < h; ++y) {
+		int sx = 0, kx = 0;
+
+		for (x = 0; x < vis; ++x) {
+			if (rows[sx >> 3] & 0x80 >> (sx & 7)) {
+				dst[x] = fgc;
+				if (ph)
+					ph[x] = 0;
+			}
+			if (++kx == k) {
+				kx = 0;
+				sx++;
+			}
+		}
+		dst += stride;
+		ph += pstride;
+		if (++ky == k) {
+			ky = 0;
+			rows += bpr;
+		}
+	}
+}
+
+/* A kitty layer on each of the vis cells of a glyph from (x, y). dst is
+ * the glyph's top left pixel in a target of the given stride; ph, when not
+ * NULL, is the same place in the C8 dither phases. */
+static void kitty_layer(uint32_t *dst, int stride, uint8_t *ph, int pstride,
+			int x, int y, int vis, enum gfx_layer layer,
+			uint8_t bit)
+{
+#if HAVOC_KITTY
+	int c;
+
+	for (c = 0; c < vis; ++c) {
+		int i = y * term.col + x + c;
+		struct gfx_target t;
+
+		if (!(term.lmask[i] & bit))
+			continue;
+		t.px = dst + c * term.cwidth;
+		t.stride = stride;
+		t.w = term.cwidth;
+		t.h = term.cheight;
+		t.phase = ph ? ph + c * term.cwidth : NULL;
+		t.phase_stride = pstride;
+		gfx_paint(term.gfx, layer, x + c, y, 0, &t);
+	}
+#endif
+}
+
+/* A cell with a sixel tile or under kitty placements, bottom to top: the
+ * plain background, kitty pictures with z below -2^30 (only on the default
+ * background), those with z below 0, the cell's content (the tile, an
+ * emoji, or the glyph's foreground pixels alone), pictures with z of 0 and
+ * up. Inverse inverts what is composed: with the alpha a (premultiplied
+ * colours), c becomes a - c.
+ *
+ * It composes into dst, an XRGB target of the given stride: the window
+ * itself, or in a C8 window a scratch cell that paint_layers8 then converts.
+ * For the scratch ph is the target's dither phase bytes, cleared by the
+ * caller; picture pixels set theirs, text pixels leave them 0. */
+static void compose_layers(uint32_t *dst, int stride, uint8_t *ph, int pstride,
+			   int x, int y, int w, int vis)
+{
+	int i = y * term.col + x;
+	const struct cell_key *k = &term.cur[i];
+	int c, px, py;
+
+	blank_to(dst, stride, vis, k->bg >> 16, k->bg >> 8, k->bg,
+		 term.cfg.opacity);
+
+	for (c = 0; c < vis; ++c)
+		if (k[c].kflags & KF_DEFBG)
+			kitty_layer(dst + c * term.cwidth, stride,
+				    ph ? ph + c * term.cwidth : NULL, pstride,
+				    x + c, y, 1, GFX_UNDER_BG, GFX_HAS_UNDER_BG);
+	kitty_layer(dst, stride, ph, pstride, x, y, vis, GFX_UNDER_TEXT,
+		    GFX_HAS_UNDER_TEXT);
+
+#if HAVOC_SIXEL
+	if (k->pic) {
+		struct gfx_target t;
+
+		t.px = dst;
+		t.stride = stride;
+		t.w = term.cwidth;
+		t.h = term.cheight;
+		t.phase = ph;
+		t.phase_stride = pstride;
+		gfx_paint(term.gfx, GFX_TILE, x, y, k->pic, &t);
+	} else
+#endif
+	if (k->picture) {
+		const uint8_t *rec;
+		unsigned pxl;
+
+		/* half a picture says nothing; see paint_cell */
+		if (x + 1 < term.col && k[1].width == 0 &&
+		    (rec = emoji_image(term.cur_ch[i], term.cwidth,
+				       term.cheight, &pxl))) {
+			emoji_paint(dst, stride, term.cwidth, term.cheight,
+				    k->bg, k[1].bg, term.cfg.opacity, rec, pxl);
+			/* the colours of an emoji are not dithered, and a
+			 * C8 window takes no slot for them (picture8) */
+			if (ph)
+				for (py = 0; py < term.cheight; ++py)
+					memset(ph + py * pstride,
+					       GFX_PHASE_NEAREST,
+					       2 * term.cwidth);
+		}
+	} else if (k->id != 0) {
+		if (pixfont_active()) {
+			int bpr;
+			const uint8_t *g = pixfont_glyph(term.cur_ch[i], w, &bpr);
+
+			print1_over(dst, stride, ph, pstride, vis,
+				    pixfont_multiple(), k->fg >> 16,
+				    k->fg >> 8, k->fg, g, bpr);
+		} else {
+			unsigned char *g = get_glyph(k->id, term.cur_ch[i], w);
+
+			print_over(dst, stride, w, vis, k->fg >> 16, k->fg >> 8,
+				   k->fg, g);
+		}
+	}
+
+	kitty_layer(dst, stride, ph, pstride, x, y, vis, GFX_OVER_TEXT,
+		    GFX_HAS_OVER_TEXT);
+
+	for (c = 0; c < vis; ++c) {
+		if (!(k[c].kflags & KF_INV))
+			continue;
+		for (py = 0; py < term.cheight; ++py) {
+			uint32_t *r = dst + py * stride + c * term.cwidth;
+
+			for (px = 0; px < term.cwidth; ++px)
+				r[px] = (r[px] & 0xff000000) |
+					((r[px] >> 24) * 0x010101 -
+					 (r[px] & 0xffffff));
+		}
+	}
+}
+
+static void paint_layers(struct buffer *buffer, int x, int y, int w, int vis)
+{
+	uint32_t *dst = buffer->data;
+
+	dst += term.margin.top * term.width + term.margin.left;
+	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
+	compose_layers(dst, term.width, NULL, 0, x, y, w, vis);
+}
+
+/* The same in a C8 window: composed in XRGB in a scratch of the cell (two
+ * at most), then each pixel to an index: picture pixels dithered to the
+ * cube, so that a picture takes no slot from the text. */
+static void paint_layers8(struct buffer *buffer, int x, int y, int w, int vis)
+{
+	static uint32_t *tmp;
+	static uint8_t *phase;
+	static size_t tmplen;
+	const struct cell_key *k = &term.cur[y * term.col + x];
+	uint8_t *dst = buffer->data;
+	int sw = vis * term.cwidth;
+
+	if (tmplen < (size_t)2 * term.cwidth * term.cheight) {
+		free(tmp);
+		free(phase);
+		tmplen = (size_t)2 * term.cwidth * term.cheight;
+		tmp = malloc(tmplen * sizeof(*tmp));
+		phase = malloc(tmplen);
+		if (tmp == NULL || phase == NULL)
+			abort();
+	}
+	/* an emoji is converted without adding slots (GFX_PHASE_NEAREST),
+	 * so its backgrounds get theirs first, as in paint_cell8; inverse
+	 * turns c into 255 - c here (C8 windows are opaque) */
+	if (k->picture) {
+		int c;
+
+		for (c = 0; c < vis; ++c)
+			c8_get(&term.colours, k[c].bg ^
+			       (k[c].kflags & KF_INV ? 0xffffff : 0));
+	}
+	memset(phase, 0, (size_t)sw * term.cheight);
+	compose_layers(tmp, sw, phase, sw, x, y, w, vis);
+
+	dst += term.margin.top * buffer->stride + term.margin.left;
+	dst = &dst[y * term.cheight * buffer->stride + x * term.cwidth];
+	gfx_to_c8(tmp, sw, phase, sw, sw, term.cheight, dst, buffer->stride,
+		  &term.colours);
+}
+
+/* Whether the cell is drawn by paint_layers. */
+static bool has_layers(const struct cell_key *k)
+{
+	return
+#if HAVOC_SIXEL
+	       k->pic ||
+#endif
+#if HAVOC_KITTY
+	       k->klayer ||
+#endif
+	       false;
+}
+#endif
+
 static void paint_cell(struct buffer *buffer, int x, int y)
 {
 	int i = y * term.col + x;
@@ -967,9 +1333,22 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 	vis = x + w > term.col ? term.col - x : w;
 
 	if (buffer->c8) {
+#if HAVE_GRAPHICS
+		if (has_layers(k)) {
+			paint_layers8(buffer, x, y, w, vis);
+			return;
+		}
+#endif
 		paint_cell8(buffer, x, y, w, vis);
 		return;
 	}
+
+#if HAVE_GRAPHICS
+	if (has_layers(k)) {
+		paint_layers(buffer, x, y, w, vis);
+		return;
+	}
+#endif
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
@@ -1268,6 +1647,10 @@ static void redraw(void)
 	bool full;
 
 	c8_update();
+#if HAVOC_KITTY
+	/* before the draw: collect_cell puts the layers into the keys */
+	gfx_frame(term.gfx, term.klayer, term.lmask);
+#endif
 	tsm_screen_draw(term.screen, collect_cell, NULL);
 
 	/* What the compositor shows is only known to be what we last
@@ -2113,6 +2496,7 @@ static void do_configure(void)
 	int col, row;
 	int padding = (term.cfg.padding * term.scale + 60) / 120;
 	int logicalwidth, logicalheight;
+	bool pty_size = false;
 
 	if (term.confwidth)
 		scaledwidth = (term.confwidth * term.scale + 60) / 120;
@@ -2184,10 +2568,6 @@ static void do_configure(void)
 	}
 
 	if (term.col != col || term.row != row) {
-		struct winsize ws = {
-			row, col, 0, 0
-		};
-
 		term.col = col;
 		term.row = row;
 		tsm_screen_resize(term.screen, col, row);
@@ -2196,6 +2576,14 @@ static void do_configure(void)
 		free(term.shown);
 		free(term.cur_ch);
 		free(term.flags);
+#if HAVOC_KITTY
+		free(term.klayer);
+		free(term.lmask);
+		term.klayer = calloc(col * row, sizeof(*term.klayer));
+		term.lmask = calloc(col * row, sizeof(*term.lmask));
+		if (!term.klayer || !term.lmask)
+			abort();
+#endif
 		term.cur = calloc(col * row, sizeof(*term.cur));
 		term.shown = calloc(col * row, sizeof(*term.shown));
 		term.cur_ch = calloc(col * row, sizeof(*term.cur_ch));
@@ -2203,12 +2591,40 @@ static void do_configure(void)
 		if (!term.cur || !term.shown || !term.cur_ch || !term.flags)
 			abort();
 		term.shown_valid = false;
-
-		if (term.master_fd >= 0) {
-			if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
-				error("could not resize pty");
-		}
+		pty_size = true;
 		term.need_redraw = true;
+	}
+
+#if HAVE_GRAPHICS
+	if (gfx_enabled(term.gfx)) {
+		unsigned long xp = (unsigned long)col * term.cwidth;
+		unsigned long yp = (unsigned long)row * term.cheight;
+
+		gfx_set_geometry(term.gfx, term.cwidth, term.cheight, col, row);
+		/* the pixel fields change with the cell size alone too */
+		if (xp > 65535)
+			xp = 65535;
+		if (yp > 65535)
+			yp = 65535;
+		if (xp != term.ws_xpixel || yp != term.ws_ypixel) {
+			term.ws_xpixel = xp;
+			term.ws_ypixel = yp;
+			pty_size = true;
+		}
+	}
+#endif
+
+	if (pty_size && term.master_fd >= 0) {
+		struct winsize ws = {
+			row, col, 0, 0
+		};
+
+#if HAVE_GRAPHICS
+		ws.ws_xpixel = term.ws_xpixel;
+		ws.ws_ypixel = term.ws_ypixel;
+#endif
+		if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
+			error("could not resize pty");
 	}
 }
 
@@ -2570,6 +2986,33 @@ static void font_config(char *key, char *val)
 			sizeof(term.cfg.font_pixel) - 1);
 }
 
+static void graphics_config(char *key, char *val)
+{
+	if (strcmp(key, "sixel") == 0) {
+#if HAVOC_SIXEL
+		term.cfg.gfx.sixel = strcmp(val, "yes") == 0;
+#else
+		if (strcmp(val, "yes") == 0)
+			fprintf(stderr, "[graphics] sixel is not built in\n");
+#endif
+	} else if (strcmp(key, "kitty") == 0) {
+#if HAVOC_KITTY
+		term.cfg.gfx.kitty = strcmp(val, "yes") == 0;
+#else
+		if (strcmp(val, "yes") == 0)
+			fprintf(stderr, "[graphics] kitty is not built in\n");
+#endif
+	} else if (strcmp(key, "kitty shm") == 0) {
+#if HAVOC_KITTY
+		term.cfg.gfx.kitty_shm = strcmp(val, "yes") == 0;
+#endif
+	} else if (strcmp(key, "memory") == 0) {
+#if HAVE_GRAPHICS
+		term.cfg.gfx.memory = cfg_num(val, 10, 0, 16777216);
+#endif
+	}
+}
+
 static void bind_config(char *key, char *val)
 {
 	unsigned int mods = 0;
@@ -2715,6 +3158,8 @@ static void read_config(void)
 				section = &terminal_config;
 			else if (strcmp(key, "font") == 0)
 				section = &font_config;
+			else if (strcmp(key, "graphics") == 0)
+				section = &graphics_config;
 			else if (strcmp(key, "bind") == 0)
 				section = &bind_config;
 			else if (strcmp(key, "colors") == 0)
@@ -2857,6 +3302,11 @@ retry:
 
 	if (tsm_vte_new(&term.vte, term.screen, wcb, NULL) < 0)
 		fail(evte, "failed to create tsm vte");
+#if HAVE_GRAPHICS
+	term.gfx = gfx_new(term.screen, term.vte, &term.cfg.gfx);
+	gfx_set_geometry(term.gfx, term.cwidth, term.cheight, term.cfg.col,
+			 term.cfg.row);
+#endif
 
 	term.surf = wl_compositor_create_surface(term.cp);
 	if (term.surf == NULL)
@@ -2994,6 +3444,9 @@ etoplvl:
 exdgsurf:
 	wl_surface_destroy(term.surf);
 esurf:
+#if HAVE_GRAPHICS
+	gfx_free(term.gfx);
+#endif
 	tsm_vte_unref(term.vte);
 evte:
 	tsm_screen_unref(term.screen);

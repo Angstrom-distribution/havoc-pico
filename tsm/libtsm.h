@@ -128,7 +128,21 @@ struct tsm_screen_attr {
 	unsigned int inverse : 1;	/* inverse colors */
 	unsigned int protect : 1;	/* cannot be erased */
 	unsigned int blink : 1;		/* blinking character */
+#if HAVOC_SIXEL
+	uint32_t pic;			/* 0, or TSM_PIC(slot, col, row) */
+#endif
 };
+
+#if HAVOC_SIXEL
+/* A cell can hold one tile of a picture the caller keeps: its slot and the
+ * tile's column and row inside the picture. */
+#define TSM_PIC(slot, col, row) \
+	((uint32_t)(slot) << 24 | (uint32_t)(row) << 12 | (uint32_t)(col))
+#define TSM_PIC_SLOT(p)	((p) >> 24)
+#define TSM_PIC_ROW(p)	((p) >> 12 & 0xfff)
+#define TSM_PIC_COL(p)	((p) & 0xfff)
+#define TSM_PIC_MAX	4096		/* columns or rows of one picture */
+#endif
 
 typedef void (*tsm_screen_draw_cb) (struct tsm_screen *con,
 				    uint32_t id,
@@ -157,6 +171,71 @@ void tsm_screen_set_max_sb(struct tsm_screen *con, int max);
 typedef bool (*tsm_picture_cb) (uint32_t ucs4);
 void tsm_screen_set_picture_cb(struct tsm_screen *con, tsm_picture_cb cb);
 void tsm_screen_clear_sb(struct tsm_screen *con);
+
+/* Changes that move or drop lines, for a consumer that keeps pictures
+ * outside the cells. The callback runs after the change. */
+enum tsm_screen_event_type {
+	TSM_SCREEN_EV_SCROLL,		/* rows top..bottom moved by n */
+	TSM_SCREEN_EV_ERASE_SCREEN,	/* tsm_screen_erase_screen */
+	TSM_SCREEN_EV_CLEAR_SB,		/* tsm_screen_clear_sb */
+	TSM_SCREEN_EV_ALTERNATE,	/* the other screen is active now */
+	TSM_SCREEN_EV_RESET,		/* tsm_vte_hard_reset, after its erases */
+};
+
+struct tsm_screen_event {
+	enum tsm_screen_event_type type;
+	bool alt;	/* the screen it happened on; ALTERNATE: the one now active */
+	int top, bottom;	/* SCROLL: rows, inclusive, before the move */
+	int n;		/* SCROLL: > 0 up (towards the scrollback), < 0 down */
+	bool to_sb;	/* SCROLL up: the rows that left at the top went into
+			 * the scrollback (main screen); else they were dropped */
+};
+
+typedef void (*tsm_screen_event_cb)(struct tsm_screen *con,
+				    const struct tsm_screen_event *ev,
+				    void *data);
+void tsm_screen_set_event_cb(struct tsm_screen *con, tsm_screen_event_cb cb,
+			     void *data);
+
+#if HAVOC_SIXEL
+#define TSM_PIC_CURSOR_RIGHT	0x01
+
+/* Put slot's cols x rows tiles at the cursor. A pending wrap first goes to
+ * column 0 of the next line (auto-wrap on) or stays in the last column.
+ * Each row: the cells from the cursor column to the right margin, at most
+ * cols, become blank cells with attr (pic set per cell); a wide character
+ * cut by the first or last tile column is blanked (its other half with
+ * def_attr). Between rows a line feed, scrolling at the bottom margin. The
+ * cursor then goes to row cursor_row (0-based; when that row scrolled off,
+ * the top of the scroll region the cursor started in, else row 0) at the
+ * start column, or with TSM_PIC_CURSOR_RIGHT to the
+ * column after the picture, wrapping to column 0 of the next line (with
+ * scroll) past the right margin. Returns 0, or -EINVAL for slot not in
+ * 1..255, cols or rows not in 1..TSM_PIC_MAX. */
+int tsm_screen_place_picture(struct tsm_screen *con,
+			     const struct tsm_screen_attr *attr,
+			     unsigned int slot, int cols, int rows,
+			     int cursor_row, unsigned int flags);
+
+enum {
+	TSM_PIC_MAIN,	/* the main screen's lines */
+	TSM_PIC_ALT,	/* the alternate screen's lines */
+	TSM_PIC_SB,	/* the scrollback */
+	TSM_PIC_VIEW,	/* the lines drawn now (scrollback in view + screen) */
+	TSM_PIC_SETS
+};
+/* used[set][slot / 8] bit (slot % 8): a cell refers to slot. Looks only at
+ * lines with has_pic and clears has_pic on those that hold no tile. */
+void tsm_screen_pictures_used(struct tsm_screen *con,
+			      uint8_t used[TSM_PIC_SETS][32]);
+/* Clear pic in every cell that refers to slot, keeping the cell's colours. */
+void tsm_screen_drop_picture(struct tsm_screen *con, unsigned int slot);
+#endif
+
+int tsm_screen_get_sb_count(struct tsm_screen *con);
+/* scrollback lines shown above the screen's first row: 0 unless scrolled
+ * back; sb_last->sb_id - sb_pos->sb_id + 1 */
+int tsm_screen_get_sb_offset(struct tsm_screen *con);
 
 void tsm_screen_sb_up(struct tsm_screen *con, int num);
 void tsm_screen_sb_down(struct tsm_screen *con, int num);
@@ -309,6 +388,69 @@ bool tsm_vte_handle_keyboard(struct tsm_vte *vte, uint32_t keysym,
 			     uint32_t unicode);
 void tsm_vte_paste_begin(struct tsm_vte *vte);
 void tsm_vte_paste_end(struct tsm_vte *vte);
+
+/* Control strings (DCS, APC) for a consumer: the vte calls start when one
+ * begins, put with its data and end exactly once after every start that
+ * returned true. Without ops, or when start returns false, the string is
+ * ignored up to its end as before. */
+enum tsm_vte_str_kind {
+	TSM_VTE_STR_DCS,
+	TSM_VTE_STR_APC,
+};
+
+enum tsm_vte_str_end {
+	TSM_VTE_STR_DONE,	/* ST: ESC \ or U+009C */
+	TSM_VTE_STR_ABORT,	/* CAN, SUB, ESC + other, another C1, reset, put false */
+};
+
+/* info.flags */
+#define TSM_VTE_STR_PRIVATE		0x01	/* a < = > ? before the final byte */
+#define TSM_VTE_STR_INTERMEDIATE	0x02	/* a byte 0x20 to 0x2f before it */
+
+struct tsm_vte_str_info {
+	enum tsm_vte_str_kind kind;
+	uint32_t final;		/* DCS: final byte ('q' for sixel); APC: 0 */
+	unsigned int flags;
+	int argc;		/* DCS: parameters given, at least 1; APC: 0 */
+	const int *argv;	/* -1 for an empty one; valid during start only */
+};
+
+struct tsm_vte_str_ops {
+	bool (*start)(void *data, const struct tsm_vte_str_info *info);
+	/* bytes 0x20 to 0x7e, 1 to 256 at a time; false: libtsm calls
+	 * end(ABORT) at once and ignores the rest of the string. Bytes
+	 * still held back when a string is aborted are dropped. */
+	bool (*put)(void *data, const char *buf, size_t len);
+	void (*end)(void *data, enum tsm_vte_str_end how);
+};
+
+/* Replacing the ops, tsm_vte_reset() and the last tsm_vte_unref() call
+ * end(ABORT) for an open string, so set NULL ops before freeing data. */
+void tsm_vte_set_str_ops(struct tsm_vte *vte,
+			 const struct tsm_vte_str_ops *ops, void *data);
+
+/* Write a reply to the program, in order with the vte's own replies. */
+void tsm_vte_reply(struct tsm_vte *vte, const char *u8, size_t len);
+
+/* The vte's current attributes (SGR state), for pictures placed by the
+ * caller with the current background. */
+void tsm_vte_get_attr(struct tsm_vte *vte, struct tsm_screen_attr *out);
+
+/* What the replies say about pictures. NULL (the state after
+ * tsm_vte_new) restores the replies of before: no 4 in DA1, no
+ * XTSMGRAPHICS, CSI t, XTVERSION reply, CSI ? S scrolls, ED 3 ignored. */
+struct tsm_vte_graphics {
+	bool sixel;			/* DA1 4, XTSMGRAPHICS */
+	unsigned int cell_w, cell_h;	/* pixels */
+	unsigned int registers;		/* 256 */
+	const char *version;		/* "0.7.0-git": XTVERSION havoc(...) */
+};
+void tsm_vte_set_graphics(struct tsm_vte *vte,
+			  const struct tsm_vte_graphics *g);
+
+/* modes for picture consumers */
+#define TSM_VTE_SIXEL_CURSOR_RIGHT	0x01	/* DECSET 8452 */
+unsigned int tsm_vte_get_graphics_flags(struct tsm_vte *vte);
 
 /** @} */
 
