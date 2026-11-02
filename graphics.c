@@ -221,6 +221,9 @@ static void place(struct gfx *g, struct sixel_image *img)
 	if (tsm_vte_get_graphics_flags(g->vte) & TSM_VTE_SIXEL_CURSOR_RIGHT)
 		flags |= TSM_PIC_CURSOR_RIGHT;
 	tsm_vte_get_attr(g->vte, &attr);
+	/* the tiles keep the cell's inverse bit, which the cursor and a
+	 * selection use; an SGR 7 in force must not invert the picture */
+	attr.inverse = 0;
 	/* the cursor ends on the last row the picture covers */
 	if (tsm_screen_place_picture(g->scr, &attr, i, cols, rows, rows - 1,
 				     flags) < 0)
