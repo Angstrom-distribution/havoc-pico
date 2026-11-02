@@ -8,6 +8,9 @@
 #include "base64.h"
 #include "kitty.h"
 #include "kitty-shm.h"
+#if HAVOC_PNG
+#include "kitty-png.h"
+#endif
 
 #define CTRL_MAX	512
 #define NAME_MAX_LEN	255
@@ -49,7 +52,11 @@ struct kitty {
 	size_t name_len;	/* NAME_MAX_LEN + 1: too long */
 
 	struct kraw raw;
-	bool raw_on;
+	bool sink_on;		/* a sink holds the transfer's data */
+#if HAVOC_PNG
+	struct kitty_z *z;	/* o=z */
+	struct kitty_png *png;	/* f=100 */
+#endif
 
 	struct kitty_result prior;
 	bool have_prior;
@@ -327,12 +334,14 @@ static enum kitty_err validate(struct kitty *k, struct kitty_cmd *c)
 		return KITTY_OK;
 	if (c->f != 24 && c->f != 32 && c->f != 100)
 		return KITTY_EINVAL;
-	if (c->o != 0)
+	if (c->o != 0 && c->o != 'z')
 		return KITTY_EINVAL;
 	if (c->O != 0 || c->s > SIDE_MAX || c->v > SIDE_MAX)
 		return KITTY_EINVAL;
-	if (c->f == 100)
+#if !HAVOC_PNG
+	if (c->f == 100 || c->o == 'z')
 		return KITTY_EINVAL;
+#endif
 	if (c->t != 'd' && c->t != 's' && c->t != 'f' && c->t != 't')
 		return KITTY_EINVAL;
 	if (c->f != 100 && (!c->s || !c->v))
@@ -349,7 +358,13 @@ static enum kitty_err validate(struct kitty *k, struct kitty_cmd *c)
 static void sink_free(struct kitty *k)
 {
 	raw_free(&k->raw);
-	k->raw_on = false;
+#if HAVOC_PNG
+	kitty_z_free(k->z);
+	k->z = NULL;
+	kitty_png_free(k->png);
+	k->png = NULL;
+#endif
+	k->sink_on = false;
 }
 
 /* Start decoding into a fresh sink. */
@@ -357,28 +372,78 @@ static enum kitty_err sink_start(struct kitty *k)
 {
 	const struct kitty_cmd *c = &k->cmd;
 
+#if HAVOC_PNG
+	if (c->o == 'z') {
+		k->z = kitty_z_new();
+		if (!k->z)
+			return KITTY_ENOMEM;
+	}
+	if (c->f == 100) {
+		k->png = kitty_png_new(&k->lim);
+		if (!k->png)
+			return KITTY_ENOMEM;
+		k->sink_on = true;
+		return KITTY_OK;
+	}
+#endif
 	if (!raw_init(k, c->s, c->v, c->f == 32))
 		return KITTY_ENOMEM;
-	k->raw_on = true;
+	k->sink_on = true;
 	return KITTY_OK;
+}
+
+static void seterr(struct kitty *k, enum kitty_err err)
+{
+	if (!k->err)
+		k->err = err;
 }
 
 static void fail(struct kitty *k, enum kitty_err err)
 {
-	if (!k->err)
-		k->err = err;
+	seterr(k, err);
 	sink_free(k);
+}
+
+/* Decoded bytes into the picture; must not free the sink (zlib calls it). */
+static bool sink_data(void *data, const uint8_t *b, size_t n)
+{
+	struct kitty *k = data;
+
+#if HAVOC_PNG
+	if (k->png) {
+		enum kitty_err e = KITTY_OK;
+
+		if (!kitty_png_put(k->png, b, n, &e)) {
+			seterr(k, e);
+			return false;
+		}
+		return true;
+	}
+#endif
+	if (!raw_put(&k->raw, b, n)) {
+		seterr(k, KITTY_ENODATA);
+		return false;
+	}
+	return true;
 }
 
 static bool sink_put(struct kitty *k, const uint8_t *b, size_t n)
 {
-	if (!k->raw_on)
+	bool ok;
+
+	if (!k->sink_on)
 		return true;
-	if (!raw_put(&k->raw, b, n)) {
-		fail(k, KITTY_ENODATA);
-		return false;
-	}
-	return true;
+#if HAVOC_PNG
+	if (k->z) {
+		ok = kitty_z_put(k->z, b, n, sink_data, k);
+		if (!ok)
+			seterr(k, kitty_z_done(k->z) ? KITTY_ENODATA : KITTY_EINVAL);
+	} else
+#endif
+		ok = sink_data(k, b, n);
+	if (!ok)
+		sink_free(k);
+	return ok;
 }
 
 static void name_put(struct kitty *k, const uint8_t *b, size_t n)
@@ -478,14 +543,17 @@ static bool shm_load(struct kitty *k)
 {
 	const struct kitty_cmd *c = &k->cmd;
 	struct kitty_shm m;
-	size_t need = 1, take;
+	size_t need, take;
 	enum kitty_err err;
 
 	if (k->name_len > NAME_MAX_LEN) {
 		fail(k, KITTY_EBADF_SHM);
 		return false;
 	}
-	need = (size_t)c->s * c->v * (c->f == 32 ? 4 : 3);
+	if (c->f == 100 || c->o == 'z')
+		need = 1;
+	else
+		need = (size_t)c->s * c->v * (c->f == 32 ? 4 : 3);
 	if (kitty_shm_open(k->name, k->name_len, need, 4 * k->lim.max_pixels, &m) < 0) {
 		fail(k, KITTY_EBADF_SHM);
 		return false;
@@ -497,6 +565,8 @@ static bool shm_load(struct kitty *k)
 		return false;
 	}
 	take = need;
+	if (c->f == 100 || c->o == 'z')
+		take = c->S && c->S < m.len ? c->S : m.len;
 	if (!sink_put(k, m.data, take)) {
 		kitty_shm_close(&m);
 		return false;
@@ -524,7 +594,24 @@ static void finish_data(struct kitty *k, struct kitty_image *img)
 		return;
 	if (k->by_name && !shm_load(k))
 		return;
-	if (!k->raw_on || !raw_finish(&k->raw, img))
+	if (!k->sink_on) {
+		fail(k, KITTY_ENODATA);
+		return;
+	}
+#if HAVOC_PNG
+	if (k->z && !kitty_z_done(k->z)) {
+		fail(k, KITTY_ENODATA);
+		return;
+	}
+	if (k->png) {
+		enum kitty_err e = KITTY_ENODATA;
+
+		if (!kitty_png_finish(k->png, img, &e))
+			fail(k, e);
+		return;
+	}
+#endif
+	if (!raw_finish(&k->raw, img))
 		fail(k, KITTY_ENODATA);
 }
 
