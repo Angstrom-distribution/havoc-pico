@@ -168,6 +168,8 @@ static struct {
 	struct tsm_vte *vte;
 #if HAVE_GRAPHICS
 	struct gfx *gfx;
+	/* the pixel size last given to the pty */
+	unsigned int ws_xpixel, ws_ypixel;
 #endif
 	unsigned int mods;
 
@@ -2187,6 +2189,7 @@ static void do_configure(void)
 	int col, row;
 	int padding = (term.cfg.padding * term.scale + 60) / 120;
 	int logicalwidth, logicalheight;
+	bool pty_size = false;
 
 	if (term.confwidth)
 		scaledwidth = (term.confwidth * term.scale + 60) / 120;
@@ -2258,10 +2261,6 @@ static void do_configure(void)
 	}
 
 	if (term.col != col || term.row != row) {
-		struct winsize ws = {
-			row, col, 0, 0
-		};
-
 		term.col = col;
 		term.row = row;
 		tsm_screen_resize(term.screen, col, row);
@@ -2277,12 +2276,40 @@ static void do_configure(void)
 		if (!term.cur || !term.shown || !term.cur_ch || !term.flags)
 			abort();
 		term.shown_valid = false;
-
-		if (term.master_fd >= 0) {
-			if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
-				error("could not resize pty");
-		}
+		pty_size = true;
 		term.need_redraw = true;
+	}
+
+#if HAVE_GRAPHICS
+	if (gfx_enabled(term.gfx)) {
+		unsigned long xp = (unsigned long)col * term.cwidth;
+		unsigned long yp = (unsigned long)row * term.cheight;
+
+		gfx_set_geometry(term.gfx, term.cwidth, term.cheight, col, row);
+		/* the pixel fields change with the cell size alone too */
+		if (xp > 65535)
+			xp = 65535;
+		if (yp > 65535)
+			yp = 65535;
+		if (xp != term.ws_xpixel || yp != term.ws_ypixel) {
+			term.ws_xpixel = xp;
+			term.ws_ypixel = yp;
+			pty_size = true;
+		}
+	}
+#endif
+
+	if (pty_size && term.master_fd >= 0) {
+		struct winsize ws = {
+			row, col, 0, 0
+		};
+
+#if HAVE_GRAPHICS
+		ws.ws_xpixel = term.ws_xpixel;
+		ws.ws_ypixel = term.ws_ypixel;
+#endif
+		if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
+			error("could not resize pty");
 	}
 }
 
