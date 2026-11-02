@@ -5,7 +5,8 @@
 # HAVOC_PNG=1 it is checked by kitty.py as well. Also builds with every
 # HAVOC_* variable at 0 and checks that the picture code is not in the
 # binary, and fuzzes the store (tests/fuzz-gfx.c) for FUZZ_SECONDS (default
-# 60, 0 skips it).
+# 60, 0 skips it). With PICOWL_PALETTE_XML naming picowl-palette-v1.xml
+# the kitty build is also run in a C8 window.
 # Run it in the container, from anywhere:  sh tests/run-gfx.sh [scenario ...]
 #
 # Needs gcc, make, pkg-config, wayland-scanner, wayland-protocols, the
@@ -131,3 +132,22 @@ export PYTHONDONTWRITEBYTECODE=1
 export ASAN_OPTIONS=detect_leaks=0
 python3 "$top/tests/graphics.py" "$work/fake-compositor" "$work/on/havoc" "$@"
 python3 "$top/tests/kitty.py" "$work/fake-compositor" "$work/all/havoc" "$@"
+
+# a C8 window, when the palette protocol is at hand
+xml=${PICOWL_PALETTE_XML:-}
+if [ -n "$xml" ] && [ -f "$xml" ]; then
+	wayland-scanner server-header <"$xml" >"$work/picowl-palette-v1-server.h"
+	wayland-scanner private-code <"$xml" >"$work/picowl-palette-v1-protocol.c"
+	gcc -g -O1 -Wall $san -DWITH_C8 -I"$work" -o "$work/fake-compositor-c8" \
+		"$top/tests/fake-compositor.c" "$work/xdg-shell-protocol.c" \
+		"$work/text-input-unstable-v3-protocol.c" "$work/viewporter-protocol.c" \
+		"$work/fractional-scale-v1-protocol.c" "$work/picowl-palette-v1-protocol.c" \
+		$(pkg-config --cflags --libs wayland-server xkbcommon)
+	copy "$work/c8"
+	make -C "$work/c8" HAVOC_SIXEL=1 HAVOC_KITTY=1 HAVOC_PNG=1 PICOWL_PALETTE_XML="$xml" \
+		CFLAGS="-g -O1 -Wall -Wextra -Wno-unused-parameter $san" \
+		LDFLAGS="$san" >"$work/c8.log" 2>&1 || { cat "$work/c8.log"; exit 1; }
+	KITTY_C8=1 python3 "$top/tests/kitty.py" "$work/fake-compositor-c8" "$work/c8/havoc"
+else
+	echo "kitty.py in a C8 window: skipped (no PICOWL_PALETTE_XML)"
+fi

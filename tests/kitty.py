@@ -771,6 +771,26 @@ def sc_scrolloff(r):
           "scrolloff: d=I %r" % d)
 
 
+C8_CONFIG = G.CONFIG.replace("[graphics]", "[window]\nc8=yes\n[graphics]")
+
+
+def sc_c8(r):
+    """6d: a C8 window draws no pictures yet; the cursor must still invert
+    a cell under a placement."""
+    check(r.c.stats()["format"] == str(0x20203843), "c8: window is not C8")
+    r.sync(START)
+    r.feed(cup_s(2, 0) + "abcdef")
+    r.feed(cup_s(0, 0))
+    r.sync(apc("a=T,f=32,s=48,v=40,C=1,i=1", raw(mkimg(48, 40, 1))))
+    box = (3 * CW, 2 * CH, 4 * CW, 3 * CH)
+    r.sync(cup_s(2, 3) + E + "[?25l")
+    off = r.snap().convert("RGB").crop(box)
+    r.sync(E + "[?25h")
+    on = r.snap().convert("RGB").crop(box)
+    check(on.tobytes() == ImageChops.invert(off).tobytes(),
+          "c8: the cursor over a placement is not inverted")
+
+
 def sc_region(r):
     """6b: a scroll region: a picture inside moves, one outside stays,
     insert and delete lines."""
@@ -1445,6 +1465,12 @@ def main():
     # Run uses G.Run; the scenarios use the helpers of KRun
     G.Run = KRun
     S = lambda name, fn, **kw: G.run_scenario(name, fn, **kw)  # noqa: E731
+    if os.environ.get("KITTY_C8"):
+        # the compositor and havoc are C8 builds (run-gfx.sh)
+        S("c8", sc_c8, extra=KCFG, config=C8_CONFIG, args=("--c8", "exclusive"))
+        print("%s: %d checks, %d failed" % ("PASSED" if not G.failures else
+                                            "FAILED", G.checks, len(G.failures)))
+        return 1 if G.failures else 0
     S("basic", sc_basic, extra=KCFG)
     S("formats", sc_formats, extra=KCFG)
     S("geometry", sc_geometry, extra=KCFG)
