@@ -18,8 +18,14 @@ SAN="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-fram
 $CC -g -O1 -Wall -Wextra -Werror -c $SAN -o "$tmp/sixel.o" "$root/sixel.c"
 $CC -g -O1 -Wall -Wextra $SAN -o "$tmp/test-sixel" "$t/test-sixel.c" "$tmp/sixel.o"
 
+$CC -g -O1 -Wall -Wextra $SAN -Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc \
+	-o "$tmp/test-sixel-oom" "$t/test-sixel-oom.c" "$tmp/sixel.o"
+
 echo "== built-in cases"
 "$tmp/test-sixel"
+
+echo "== failed allocations"
+"$tmp/test-sixel-oom"
 
 echo "== vectors against the reference"
 python3 -I "$t/tools/mksynth.py" "$tmp/synthetic.bin"
