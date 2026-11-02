@@ -903,11 +903,13 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 			k->pgen = gfx_pic_gen(term.gfx, a->pic);
 		}
 #endif
-		if (kl
+		/* a C8 window draws no pictures yet (paint_cell8): there
+		 * the cell is plain, so that the cursor still inverts it */
+		if (!term.c8_on && (kl
 #if HAVOC_SIXEL
 		    || a->pic
 #endif
-		    ) {
+		    )) {
 			/* a cell with a picture is composed with the plain
 			 * colours and inverted as a whole, so that the
 			 * picture inverts too */
