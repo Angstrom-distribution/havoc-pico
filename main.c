@@ -791,7 +791,8 @@ typedef uint32_t u32;
 #define mul(a, b) (((u32)(a) * (u32)(b) + 255) >> 8)
 #define join(a, r, g, b) ((u32)(a) << 24 | (u32)(r) << 16 | (u32)(g) << 8 | (u32)(b))
 
-static void blank(uint32_t *dst, int w, u8 br, u8 bg, u8 bb, u8 ba)
+static void blank_to(uint32_t *dst, int stride, int w, u8 br, u8 bg, u8 bb,
+		     u8 ba)
 {
 	int i;
 	uint32_t b;
@@ -803,8 +804,13 @@ static void blank(uint32_t *dst, int w, u8 br, u8 bg, u8 bb, u8 ba)
 	while (h--) {
 		for (i = 0; i < w; ++i)
 			dst[i] = b;
-		dst += term.width;
+		dst += stride;
 	}
+}
+
+static void blank(uint32_t *dst, int w, u8 br, u8 bg, u8 bb, u8 ba)
+{
+	blank_to(dst, term.width, w, br, bg, bb, ba);
 }
 
 /* Only vis of the w cells of the glyph fit before the right edge of the grid;
@@ -903,13 +909,11 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 			k->pgen = gfx_pic_gen(term.gfx, a->pic);
 		}
 #endif
-		/* a C8 window draws no pictures yet (paint_cell8): there
-		 * the cell is plain, so that the cursor still inverts it */
-		if (!term.c8_on && (kl
+		if (kl
 #if HAVOC_SIXEL
 		    || a->pic
 #endif
-		    )) {
+		    ) {
 			/* a cell with a picture is composed with the plain
 			 * colours and inverted as a whole, so that the
 			 * picture inverts too */
@@ -1041,8 +1045,8 @@ static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
 #if HAVE_GRAPHICS
 /* The glyph of a cell over what is there: only the pixels the glyph sets,
  * blended by the outline font's coverage. */
-static void print_over(uint32_t *dst, int w, int vis, u8 fr, u8 fg, u8 fb,
-		       const unsigned char *glyph)
+static void print_over(uint32_t *dst, int stride, int w, int vis, u8 fr, u8 fg,
+		       u8 fb, const unsigned char *glyph)
 {
 	int i;
 	int h = term.cheight;
@@ -1073,11 +1077,14 @@ static void print_over(uint32_t *dst, int w, int vis, u8 fr, u8 fg, u8 fb,
 		}
 
 		glyph += w;
-		dst += term.width;
+		dst += stride;
 	}
 }
 
-static void print1_over(uint32_t *dst, int vis, int k, u8 fr, u8 fg, u8 fb,
+/* ph: the dither phases of a C8 window's scratch (NULL otherwise); a pixel
+ * of the glyph is plain text there. */
+static void print1_over(uint32_t *dst, int stride, uint8_t *ph, int pstride,
+			int vis, int k, u8 fr, u8 fg, u8 fb,
 			const uint8_t *rows, int bpr)
 {
 	uint32_t fgc = join(0xff, fr, fg, fb);
@@ -1091,14 +1098,18 @@ static void print1_over(uint32_t *dst, int vis, int k, u8 fr, u8 fg, u8 fb,
 		int sx = 0, kx = 0;
 
 		for (x = 0; x < vis; ++x) {
-			if (rows[sx >> 3] & 0x80 >> (sx & 7))
+			if (rows[sx >> 3] & 0x80 >> (sx & 7)) {
 				dst[x] = fgc;
+				if (ph)
+					ph[x] = 0;
+			}
 			if (++kx == k) {
 				kx = 0;
 				sx++;
 			}
 		}
-		dst += term.width;
+		dst += stride;
+		ph += pstride;
 		if (++ky == k) {
 			ky = 0;
 			rows += bpr;
@@ -1106,9 +1117,12 @@ static void print1_over(uint32_t *dst, int vis, int k, u8 fr, u8 fg, u8 fb,
 	}
 }
 
-/* A kitty layer on each of the vis cells of a glyph from (x, y). */
-static void kitty_layer(struct buffer *buffer, uint32_t *dst, int x, int y,
-			int vis, enum gfx_layer layer, uint8_t bit)
+/* A kitty layer on each of the vis cells of a glyph from (x, y). dst is
+ * the glyph's top left pixel in a target of the given stride; ph, when not
+ * NULL, is the same place in the C8 dither phases. */
+static void kitty_layer(uint32_t *dst, int stride, uint8_t *ph, int pstride,
+			int x, int y, int vis, enum gfx_layer layer,
+			uint8_t bit)
 {
 #if HAVOC_KITTY
 	int c;
@@ -1120,9 +1134,11 @@ static void kitty_layer(struct buffer *buffer, uint32_t *dst, int x, int y,
 		if (!(term.lmask[i] & bit))
 			continue;
 		t.px = dst + c * term.cwidth;
-		t.stride = term.width;
+		t.stride = stride;
 		t.w = term.cwidth;
 		t.h = term.cheight;
+		t.phase = ph ? ph + c * term.cwidth : NULL;
+		t.phase_stride = pstride;
 		gfx_paint(term.gfx, layer, x + c, y, 0, &t);
 	}
 #endif
@@ -1133,32 +1149,40 @@ static void kitty_layer(struct buffer *buffer, uint32_t *dst, int x, int y,
  * background), those with z below 0, the cell's content (the tile, an
  * emoji, or the glyph's foreground pixels alone), pictures with z of 0 and
  * up. Inverse inverts what is composed: with the alpha a (premultiplied
- * colours), c becomes a - c. */
-static void paint_layers(struct buffer *buffer, int x, int y, int w, int vis)
+ * colours), c becomes a - c.
+ *
+ * It composes into dst, an XRGB target of the given stride: the window
+ * itself, or in a C8 window a scratch cell that paint_layers8 then converts.
+ * For the scratch ph is the target's dither phase bytes, cleared by the
+ * caller; picture pixels set theirs, text pixels leave them 0. */
+static void compose_layers(uint32_t *dst, int stride, uint8_t *ph, int pstride,
+			   int x, int y, int w, int vis)
 {
 	int i = y * term.col + x;
 	const struct cell_key *k = &term.cur[i];
-	uint32_t *dst = buffer->data;
 	int c, px, py;
 
-	dst += term.margin.top * term.width + term.margin.left;
-	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
-	blank(dst, vis, k->bg >> 16, k->bg >> 8, k->bg, term.cfg.opacity);
+	blank_to(dst, stride, vis, k->bg >> 16, k->bg >> 8, k->bg,
+		 term.cfg.opacity);
 
 	for (c = 0; c < vis; ++c)
 		if (k[c].kflags & KF_DEFBG)
-			kitty_layer(buffer, dst + c * term.cwidth, x + c, y, 1,
-				    GFX_UNDER_BG, GFX_HAS_UNDER_BG);
-	kitty_layer(buffer, dst, x, y, vis, GFX_UNDER_TEXT, GFX_HAS_UNDER_TEXT);
+			kitty_layer(dst + c * term.cwidth, stride,
+				    ph ? ph + c * term.cwidth : NULL, pstride,
+				    x + c, y, 1, GFX_UNDER_BG, GFX_HAS_UNDER_BG);
+	kitty_layer(dst, stride, ph, pstride, x, y, vis, GFX_UNDER_TEXT,
+		    GFX_HAS_UNDER_TEXT);
 
 #if HAVOC_SIXEL
 	if (k->pic) {
 		struct gfx_target t;
 
 		t.px = dst;
-		t.stride = term.width;
+		t.stride = stride;
 		t.w = term.cwidth;
 		t.h = term.cheight;
+		t.phase = ph;
+		t.phase_stride = pstride;
 		gfx_paint(term.gfx, GFX_TILE, x, y, k->pic, &t);
 	} else
 #endif
@@ -1169,31 +1193,41 @@ static void paint_layers(struct buffer *buffer, int x, int y, int w, int vis)
 		/* half a picture says nothing; see paint_cell */
 		if (x + 1 < term.col && k[1].width == 0 &&
 		    (rec = emoji_image(term.cur_ch[i], term.cwidth,
-				       term.cheight, &pxl)))
-			emoji_paint(dst, term.width, term.cwidth, term.cheight,
+				       term.cheight, &pxl))) {
+			emoji_paint(dst, stride, term.cwidth, term.cheight,
 				    k->bg, k[1].bg, term.cfg.opacity, rec, pxl);
+			/* the colours of an emoji are not dithered, and a
+			 * C8 window takes no slot for them (picture8) */
+			if (ph)
+				for (py = 0; py < term.cheight; ++py)
+					memset(ph + py * pstride,
+					       GFX_PHASE_NEAREST,
+					       2 * term.cwidth);
+		}
 	} else if (k->id != 0) {
 		if (pixfont_active()) {
 			int bpr;
 			const uint8_t *g = pixfont_glyph(term.cur_ch[i], w, &bpr);
 
-			print1_over(dst, vis, pixfont_multiple(), k->fg >> 16,
+			print1_over(dst, stride, ph, pstride, vis,
+				    pixfont_multiple(), k->fg >> 16,
 				    k->fg >> 8, k->fg, g, bpr);
 		} else {
 			unsigned char *g = get_glyph(k->id, term.cur_ch[i], w);
 
-			print_over(dst, w, vis, k->fg >> 16, k->fg >> 8, k->fg,
-				   g);
+			print_over(dst, stride, w, vis, k->fg >> 16, k->fg >> 8,
+				   k->fg, g);
 		}
 	}
 
-	kitty_layer(buffer, dst, x, y, vis, GFX_OVER_TEXT, GFX_HAS_OVER_TEXT);
+	kitty_layer(dst, stride, ph, pstride, x, y, vis, GFX_OVER_TEXT,
+		    GFX_HAS_OVER_TEXT);
 
 	for (c = 0; c < vis; ++c) {
 		if (!(k[c].kflags & KF_INV))
 			continue;
 		for (py = 0; py < term.cheight; ++py) {
-			uint32_t *r = dst + py * term.width + c * term.cwidth;
+			uint32_t *r = dst + py * stride + c * term.cwidth;
 
 			for (px = 0; px < term.cwidth; ++px)
 				r[px] = (r[px] & 0xff000000) |
@@ -1201,6 +1235,44 @@ static void paint_layers(struct buffer *buffer, int x, int y, int w, int vis)
 					 (r[px] & 0xffffff));
 		}
 	}
+}
+
+static void paint_layers(struct buffer *buffer, int x, int y, int w, int vis)
+{
+	uint32_t *dst = buffer->data;
+
+	dst += term.margin.top * term.width + term.margin.left;
+	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
+	compose_layers(dst, term.width, NULL, 0, x, y, w, vis);
+}
+
+/* The same in a C8 window: composed in XRGB in a scratch of the cell (two
+ * at most), then each pixel to an index: picture pixels dithered to the
+ * cube, so that a picture takes no slot from the text. */
+static void paint_layers8(struct buffer *buffer, int x, int y, int w, int vis)
+{
+	static uint32_t *tmp;
+	static uint8_t *phase;
+	static size_t tmplen;
+	uint8_t *dst = buffer->data;
+	int sw = vis * term.cwidth;
+
+	if (tmplen < (size_t)2 * term.cwidth * term.cheight) {
+		free(tmp);
+		free(phase);
+		tmplen = (size_t)2 * term.cwidth * term.cheight;
+		tmp = malloc(tmplen * sizeof(*tmp));
+		phase = malloc(tmplen);
+		if (tmp == NULL || phase == NULL)
+			abort();
+	}
+	memset(phase, 0, (size_t)sw * term.cheight);
+	compose_layers(tmp, sw, phase, sw, x, y, w, vis);
+
+	dst += term.margin.top * buffer->stride + term.margin.left;
+	dst = &dst[y * term.cheight * buffer->stride + x * term.cwidth];
+	gfx_to_c8(tmp, sw, phase, sw, sw, term.cheight, dst, buffer->stride,
+		  &term.colours);
 }
 
 /* Whether the cell is drawn by paint_layers. */
@@ -1237,6 +1309,12 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 	vis = x + w > term.col ? term.col - x : w;
 
 	if (buffer->c8) {
+#if HAVE_GRAPHICS
+		if (has_layers(k)) {
+			paint_layers8(buffer, x, y, w, vis);
+			return;
+		}
+#endif
 		paint_cell8(buffer, x, y, w, vis);
 		return;
 	}

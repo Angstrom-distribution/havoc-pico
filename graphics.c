@@ -943,7 +943,7 @@ static void paint_tile(struct gfx *g, uint32_t pic,
 {
 	const struct slot *s = g->slot[TSM_PIC_SLOT(pic)];
 	uint32_t fx, fy, ay = 0;
-	unsigned int x0, y0;
+	unsigned int x0, y0, ox, oy;
 	int px, py;
 
 	if (!s)
@@ -954,6 +954,9 @@ static void paint_tile(struct gfx *g, uint32_t pic,
 	fy = (s->ch0 << 16) / g->ch;
 	x0 = TSM_PIC_COL(pic) * s->cw0;
 	y0 = TSM_PIC_ROW(pic) * s->ch0;
+	/* the picture's own pixel of the tile's corner, in target pixels */
+	ox = TSM_PIC_COL(pic) * g->cw;
+	oy = TSM_PIC_ROW(pic) * g->ch;
 
 	for (py = 0; py < t->h; py++, ay += fy) {
 		unsigned int sy = y0 + (ay >> 16);
@@ -961,6 +964,9 @@ static void paint_tile(struct gfx *g, uint32_t pic,
 		size_t base;
 		uint32_t ax = 0;
 		uint32_t *dst = t->px + (size_t)py * t->stride;
+		uint8_t *ph = t->phase ? t->phase + (size_t)py * t->phase_stride :
+				NULL;
+		unsigned int prow = GFX_PHASE_PICTURE | ((oy + py) & 3) << 2;
 
 		/* below the picture: the last tile is partly empty */
 		if (sy >= s->h)
@@ -976,6 +982,8 @@ static void paint_tile(struct gfx *g, uint32_t pic,
 			if (s->mask && !(s->mask[bit >> 3] >> (bit & 7) & 1))
 				continue;
 			dst[px] = 0xff000000 | s->pal[row[sx]];
+			if (ph)
+				ph[px] = prow | ((ox + px) & 3);
 		}
 	}
 }
@@ -1026,12 +1034,19 @@ static void paint_kplace(const struct gfx *g, const struct kplace *p,
 		     ((uint64_t)p->dh * g->ch);
 	int64_t xend = (int64_t)p->sw << 16, yend = (int64_t)p->sh << 16;
 	int64_t ay = ay0;
+	/* the displayed picture's own pixel of the cell's corner, for the
+	 * dither pattern; the offsets are in the cell size of the placement */
+	int ox = tx * g->cw - (int)((int64_t)p->dx * g->cw / (p->cw0 ? p->cw0 : 1));
+	int oy = ty * g->ch - (int)((int64_t)p->dy * g->ch / (p->ch0 ? p->ch0 : 1));
 	int px, py;
 
 	for (py = 0; py < t->h; py++, ay += fy) {
 		const uint16_t *rgb;
 		const uint8_t *al;
 		uint32_t *dst = t->px + (size_t)py * t->stride;
+		uint8_t *ph = t->phase ? t->phase + (size_t)py * t->phase_stride :
+				NULL;
+		unsigned int prow = GFX_PHASE_PICTURE | ((oy + py) & 3) << 2;
 		int64_t ax = ax0;
 		size_t row;
 
@@ -1054,6 +1069,8 @@ static void paint_kplace(const struct gfx *g, const struct kplace *p,
 			a = al ? al[sx] : 255;
 			if (!a)
 				continue;
+			if (ph)
+				ph[px] = prow | ((ox + px) & 3);
 			v = rgb[sx];
 			r = c5[v >> 11];
 			gr = c6[v >> 5 & 63];
@@ -1175,6 +1192,30 @@ void gfx_paint(struct gfx *g, enum gfx_layer layer, int x, int y,
 	(void)y;
 	(void)pic;
 	(void)t;
+}
+
+void gfx_to_c8(const uint32_t *src, int sstride, const uint8_t *phase,
+	       int pstride, int w, int h, uint8_t *dst, int dstride,
+	       struct c8_table *t)
+{
+	int x, y;
+
+	for (y = 0; y < h; y++) {
+		const uint32_t *s = src + (size_t)y * sstride;
+		const uint8_t *ph = phase + (size_t)y * pstride;
+		uint8_t *d = dst + (size_t)y * dstride;
+
+		for (x = 0; x < w; x++) {
+			uint32_t rgb = s[x] & 0xffffff;
+
+			if (ph[x] & GFX_PHASE_PICTURE)
+				d[x] = c8_dither(rgb, ph[x]);
+			else if (ph[x] & GFX_PHASE_NEAREST)
+				d[x] = c8_find(t, rgb);
+			else
+				d[x] = c8_get(t, rgb);
+		}
+	}
 }
 
 void gfx_debug(const struct gfx *g)
