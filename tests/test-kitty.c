@@ -331,6 +331,8 @@ static void errors(void)
 		{ "a=t,f=24,s=4,v=4,", KITTY_EINVAL },
 		{ "a=t,f=24,s=4x,v=4", KITTY_EINVAL },
 		{ "a=1,f=24,s=4,v=4", KITTY_EINVAL },
+		{ "a=t,f=24,s=4,v=4,\xe4=1", KITTY_EINVAL },
+		{ "a=\xe4,f=24,s=4,v=4", KITTY_EINVAL },
 	};
 
 	for (i = 0; i < sizeof t / sizeof t[0]; i++) {

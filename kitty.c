@@ -1,6 +1,5 @@
 /* Kitty graphics protocol, receive side: APC parser, chunk handling and
  * decoding to RGB565 (plus an alpha plane). Placement is not done here. */
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -213,6 +212,13 @@ static char *charfield(struct kitty_cmd *c, char key)
 
 #define KEYBIT(key)	((uint64_t)1 << ((key) - 'A'))
 
+/* not isalpha: a locale could pass bytes above 0x7f, and KEYBIT needs a
+ * letter */
+static bool letter(char c)
+{
+	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
 static void cmd_defaults(struct kitty_cmd *c)
 {
 	memset(c, 0, sizeof *c);
@@ -236,7 +242,7 @@ static bool parse_ctrl(const char *s, size_t n, bool over, struct kitty_cmd *c)
 		char *cf;
 		size_t start;
 
-		if (!isalpha((unsigned char)key) || i + 1 >= n || s[i + 1] != '=')
+		if (!letter(key) || i + 1 >= n || s[i + 1] != '=')
 			return false;
 		i += 2;
 		start = i;
@@ -246,7 +252,7 @@ static bool parse_ctrl(const char *s, size_t n, bool over, struct kitty_cmd *c)
 			return false;
 		cf = charfield(c, key);
 		if (cf) {
-			if (i - start != 1 || !isalpha((unsigned char)s[start]))
+			if (i - start != 1 || !letter(s[start]))
 				return false;
 			if (c->keys & KEYBIT(key) && *cf != s[start])
 				return false;
