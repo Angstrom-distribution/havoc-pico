@@ -367,6 +367,9 @@ def gen_pngs(out):
     add("badcrc", png, 8, 8, None, "einval")
     png, _ = mk("short", 40, 40, 2, 8, False, truncate=30)
     add("short", png, 40, 40, None, "enodata")
+    # a complete file whose image data holds 3 of its 8 rows
+    rows = [bytes(24)] * 3
+    add("fewrows", write_png(8, 8, 2, 8, rows), 8, 8, None, "enodata")
     add("notpng", b"this is not a png file at all", 0, 0, None, "einval")
     open("%s/list.txt" % out, "w").write("\n".join(lst) + "\n")
 

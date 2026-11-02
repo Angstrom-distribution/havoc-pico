@@ -87,6 +87,7 @@ struct kitty_png {
 	enum kitty_err err;
 	bool done, got_info;
 	unsigned int w, h;
+	unsigned int rows;	/* rows received; libpng may end the image early */
 	uint16_t *rgb;
 	uint8_t *alpha;
 	uint8_t aand;
@@ -139,6 +140,11 @@ static void info_cb(png_structp png, png_infop info)
 		png_set_gray_to_rgb(png);
 	png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
 	png_read_update_info(png, info);
+	/* row_cb reads 4 bytes per pixel */
+	if (png_get_rowbytes(png, info) != (size_t)w * 4) {
+		p->err = KITTY_EINVAL;
+		png_error(png, "row size");
+	}
 	p->got_info = true;
 }
 
@@ -161,6 +167,7 @@ static void row_cb(png_structp png, png_bytep row, png_uint_32 num, int pass)
 		aand &= row[3];
 	}
 	p->aand = aand;
+	p->rows++;
 }
 
 static void end_cb(png_structp png, png_infop info)
@@ -215,7 +222,9 @@ bool kitty_png_put(struct kitty_png *p, const uint8_t *buf, size_t len,
 bool kitty_png_finish(struct kitty_png *p, struct kitty_image *out,
 		      enum kitty_err *err)
 {
-	if (p->err || !p->done || !p->got_info) {
+	/* IDAT may end before the last row with only a warning, which would
+	 * leave rows of uninitialised memory */
+	if (p->err || !p->done || !p->got_info || p->rows != p->h) {
 		*err = p->err ? p->err : KITTY_ENODATA;
 		return false;
 	}
