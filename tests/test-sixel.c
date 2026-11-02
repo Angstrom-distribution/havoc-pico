@@ -226,6 +226,13 @@ static void test_repeat(void)
 	CHECK(dec(0, NULL, &l100, "!4000000000~", &im) == 0);
 	CHECK(im.w == 100 && im.mask == NULL);
 	free_img(&im);
+	/* parameters saturate at 65535 rather than wrap: 65536 is not 0, and
+	 * register 65580 is 65535 & 255 */
+	CHECK(dec(0, NULL, &wide, "!65536~", &im) == 0 && im.w == 4096);
+	free_img(&im);
+	CHECK(dec(0, NULL, &wide, "#65580;2;100;0;0~", &im) == 0);
+	CHECK(im.pix[0] == 255 && im.pal[255] == 0xff0000);
+	free_img(&im);
 	/* a repeat is dropped when no data byte follows it */
 	CHECK(dec(0, NULL, &wide, "!5#2~", &im) == 0 && im.w == 1 && im.pix[0] == 2);
 	free_img(&im);
@@ -401,6 +408,15 @@ static void test_mask(void)
 
 	/* all set: no mask */
 	CHECK(dec(0, NULL, &wide, "~~~", &im) == 0 && im.mask == NULL);
+	free_img(&im);
+	/* one pixel unset, in a full byte of the mask and in the last,
+	 * partial one: the mask stays */
+	CHECK(dec(1, (int[]){ 7 }, &wide, "~}", &im) == 0 && im.mask != NULL);
+	CHECK(im.w == 2 && im.h == 6 && !is_set(&im, 1, 0) && is_set(&im, 1, 1) &&
+	      is_set(&im, 0, 0));
+	free_img(&im);
+	CHECK(dec(1, (int[]){ 7 }, &wide, "~^", &im) == 0 && im.mask != NULL);
+	CHECK(im.w == 2 && im.h == 6 && !is_set(&im, 1, 5) && is_set(&im, 0, 5));
 	free_img(&im);
 	CHECK(dec(0, NULL, &wide, "?~", &im) == 0 && im.mask != NULL);
 	CHECK(!is_set(&im, 0, 0) && is_set(&im, 1, 0));
