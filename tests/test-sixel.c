@@ -32,13 +32,23 @@ static unsigned int rnd(void)
 	return rng_state >> 8;
 }
 
+/* 1 or 2 bytes a quarter of the time, else 1 to 40. Two statements: the
+ * order of two rnd() calls in one expression is unspecified, and the
+ * pieces must be the same with every compiler. */
+static unsigned int piece(void)
+{
+	unsigned int small = rnd() % 4 == 0;
+
+	return 1 + rnd() % (small ? 2 : 40);
+}
+
 /* Feeds body in pieces of random size, so that every state is resumed. */
 static void feed_split(struct sixel *s, const char *body, size_t len)
 {
 	size_t at = 0;
 
 	while (at < len) {
-		size_t n = 1 + rnd() % (rnd() % 4 == 0 ? 2 : 40);
+		size_t n = piece();
 
 		if (n > len - at)
 			n = len - at;
@@ -613,7 +623,7 @@ static int file_mode(const char *in, const char *out, unsigned int max_w)
 			long at = body;
 
 			while (at < k) {
-				long c = 1 + rnd() % (rnd() % 4 == 0 ? 2 : 40);
+				long c = piece();
 
 				if (c > k - at)
 					c = k - at;
