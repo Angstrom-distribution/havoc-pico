@@ -45,10 +45,21 @@ for f in "$v"/*.bin "$tmp/synthetic.bin"; do
 done
 [ $fail = 0 ] || { echo "FAILED: vectors differ"; exit 1; }
 
-echo "== fuzzing ${FUZZ_SECONDS:-60} s"
-clang -g -O1 -Wall -Wextra -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined \
-	-o "$tmp/fuzz-sixel" "$t/fuzz-sixel.c" "$root/sixel.c"
-mkdir "$tmp/corpus"
-python3 -I "$t/tools/sixel_seeds.py" "$tmp/corpus" "$v"/*.bin "$tmp/synthetic.bin"
-"$tmp/fuzz-sixel" -max_total_time="${FUZZ_SECONDS:-60}" -max_len=65536 "$tmp/corpus" 2>&1 | tail -n 4
+secs=${FUZZ_SECONDS:-60}
+if [ "$secs" -gt 0 ]; then
+	echo "== fuzzing $secs s"
+	clang -g -O1 -Wall -Wextra -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined \
+		-o "$tmp/fuzz-sixel" "$t/fuzz-sixel.c" "$root/sixel.c"
+	mkdir "$tmp/corpus"
+	python3 -I "$t/tools/sixel_seeds.py" "$tmp/corpus" "$v"/*.bin "$tmp/synthetic.bin"
+	# a finding stops the fuzzer with an error: keep its input here
+	if (cd "$tmp" && ./fuzz-sixel -max_total_time="$secs" -max_len=65536 corpus >fuzz.log 2>&1); then
+		tail -n 4 "$tmp/fuzz.log"
+	else
+		tail -n 40 "$tmp/fuzz.log"
+		cp "$tmp"/crash-* "$tmp"/oom-* "$tmp"/timeout-* . 2>/dev/null
+		echo "FAILED: fuzz-sixel"
+		exit 1
+	fi
+fi
 echo "PASSED"
