@@ -719,6 +719,58 @@ def sc_scroll(r):
     check(d and d["kitty"] >= 1, "scroll: debug %r" % d)
 
 
+def sc_scrolloff(r):
+    """6c: placements that leave the scrollback and deleted ones free their
+    memory: an anonymous picture with its last placement, an image with an
+    id only on an uppercase delete."""
+    r.sync(START)
+    r.feed(apc("a=T,f=32,s=12,v=20", raw(mkimg(12, 20, 1))))
+    r.feed(cup_s(3, 0))
+    r.feed(apc("a=T,f=32,s=12,v=10,i=5,q=2", raw(mkimg(12, 10, 2))))
+    r.sync()
+    d = r.debug()
+    check(d and d["kitty"] == 2 and d["pm"] == 2 and d["pixels"] == 360,
+          "scrolloff: placed %r" % d)
+    # 100 lines of scrollback: 140 line feeds take both beyond it
+    r.sync(cup_s(ROWS - 1, 0) + "\n" * 140)
+    d = r.debug()
+    check(d and d["pm"] == 0 and d["kitty"] == 1 and d["pixels"] == 120,
+          "scrolloff: beyond the scrollback %r" % d)
+    r.sync(b"\x1b_Ga=d,d=I,i=5\x1b\\")
+    d = r.debug()
+    check(d and d["kitty"] == 0 and d["pixels"] == 0,
+          "scrolloff: d=I of an unplaced image %r" % d)
+    # the alternate screen has no scrollback
+    r.sync(E + "[?1049h" + cup_s(0, 0))
+    r.feed(apc("a=T,f=32,s=12,v=20", raw(mkimg(12, 20, 3))))
+    r.sync(cup_s(ROWS - 1, 0) + "\n" * 3)
+    d = r.debug()
+    check(d and d["pa"] == 0 and d["kitty"] == 0 and d["pixels"] == 0,
+          "scrolloff: alternate screen %r" % d)
+    r.sync(E + "[?1049l")
+    # placed and deleted many times, and many placement ids of one image:
+    # nothing is left over and the list stays capped
+    for i in range(300):
+        r.feed(cup_s(i % 20, (i * 3) % 30))
+        r.feed(apc("a=T,f=32,s=6,v=10,X=%d,q=2" % (i % 5), raw(mkimg(6, 10, i))))
+        r.feed(b"\x1b_Ga=d,d=a,q=2\x1b\\")
+    r.sync()
+    d = r.debug()
+    check(d and d["kitty"] == 0 and d["pm"] == 0 and d["pixels"] == 0,
+          "scrolloff: placed and deleted %r" % d)
+    r.feed(apc("a=t,f=32,s=6,v=10,i=9,q=2", raw(mkimg(6, 10, 9))))
+    for i in range(300):
+        r.feed(cup_s(i % 30, i % 39) + "\x1b_Ga=p,i=9,p=%d,C=1,q=2\x1b\\" % (i + 1))
+    r.sync()
+    d = r.debug()
+    check(d and d["kitty"] == 1 and d["pm"] <= 256 and d["pixels"] == 60,
+          "scrolloff: many placement ids %r" % d)
+    r.sync(b"\x1b_Ga=d,d=I,i=9\x1b\\")
+    d = r.debug()
+    check(d and d["kitty"] == 0 and d["pm"] == 0 and d["pixels"] == 0,
+          "scrolloff: d=I %r" % d)
+
+
 def sc_region(r):
     """6b: a scroll region: a picture inside moves, one outside stays,
     insert and delete lines."""
@@ -1399,6 +1451,7 @@ def main():
     S("survive", sc_survive, extra=KCFG)
     S("zorder", sc_zorder, extra=KCFG)
     S("scroll", sc_scroll, extra=KCFG)
+    S("scrolloff", sc_scrolloff, extra=KCFG, runs=(False,))
     S("region", sc_region, extra=KCFG)
     S("erase", sc_erase, extra=KCFG)
     S("delete", sc_delete, extra=KCFG)
