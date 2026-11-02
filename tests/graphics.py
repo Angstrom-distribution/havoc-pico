@@ -725,6 +725,17 @@ def sc_cursor(r):
           exp.crop((0, 2 * CH, 12 * CW, 5 * CH)).tobytes(), "cursor: rows below")
 
 
+def sc_sgr(r):
+    """6b: the SGR attributes in force when a picture arrives do not
+    change it; inverse would otherwise invert it for good."""
+    m = Model()
+    r.sync(START)
+    r.feed(E + "[7;4;5m")
+    place(r, m, picture(1), 0, 0)
+    r.feed(E + "[0m")
+    r.check("sgr", m)
+
+
 def sc_wide(r):
     """7: a wide character over tiles and at the picture's edges."""
     m = Model()
@@ -1133,6 +1144,7 @@ def main():
     run_scenario("resize", sc_resize)
     run_scenario("scale", sc_scale, fractional=True, config=ZOOM_CONFIG)
     run_scenario("cursor", sc_cursor)
+    run_scenario("sgr", sc_sgr)
     run_scenario("wide", sc_wide)
     run_scenario("right", sc_right)
     run_scenario("memory", sc_memory, extra="max_pixels=16000\n")
