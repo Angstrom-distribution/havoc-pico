@@ -6,7 +6,7 @@
 # HAVOC_* variable at 0 and checks that the picture code is not in the
 # binary, and fuzzes the store (tests/fuzz-gfx.c) for FUZZ_SECONDS (default
 # 60, 0 skips it). With PICOWL_PALETTE_XML naming picowl-palette-v1.xml
-# the kitty build is also run in a C8 window.
+# the build with all three is also run in a C8 window (c8pics.py).
 # Run it in the container, from anywhere:  sh tests/run-gfx.sh [scenario ...]
 #
 # Needs gcc, make, pkg-config, wayland-scanner, wayland-protocols, the
@@ -147,7 +147,7 @@ if [ -n "$xml" ] && [ -f "$xml" ]; then
 	make -C "$work/c8" HAVOC_SIXEL=1 HAVOC_KITTY=1 HAVOC_PNG=1 PICOWL_PALETTE_XML="$xml" \
 		CFLAGS="-g -O1 -Wall -Wextra -Wno-unused-parameter $san" \
 		LDFLAGS="$san" >"$work/c8.log" 2>&1 || { cat "$work/c8.log"; exit 1; }
-	KITTY_C8=1 python3 "$top/tests/kitty.py" "$work/fake-compositor-c8" "$work/c8/havoc"
+	python3 "$top/tests/c8pics.py" "$work/fake-compositor-c8" "$work/c8/havoc"
 else
-	echo "kitty.py in a C8 window: skipped (no PICOWL_PALETTE_XML)"
+	echo "c8pics.py: skipped (no PICOWL_PALETTE_XML)"
 fi
