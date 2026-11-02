@@ -95,6 +95,9 @@ struct line {
 	struct cell *cells;		/* actuall cells */
 	uint64_t sb_id;			/* sb ID */
 	tsm_age_t age;			/* age of the whole line */
+#if HAVOC_SIXEL
+	unsigned int has_pic : 1;	/* some cell may hold a picture tile */
+#endif
 };
 
 #define SELECTION_TOP -1
