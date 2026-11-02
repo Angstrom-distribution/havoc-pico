@@ -337,13 +337,15 @@ void sixel_put(struct sixel *s, const char *buf, size_t len)
 		put_byte(s, (unsigned char)buf[i]);
 }
 
-static size_t popcount_bytes(const uint8_t *m, size_t n)
+/* Bits past the end of the last byte are clear. */
+static bool all_set(const uint8_t *m, size_t bits)
 {
-	size_t i, c = 0;
+	size_t i, n = bits >> 3;
 
 	for (i = 0; i < n; i++)
-		c += __builtin_popcount(m[i]);
-	return c;
+		if (m[i] != 0xff)
+			return false;
+	return !(bits & 7) || m[n] == (1u << (bits & 7)) - 1;
 }
 
 int sixel_finish(struct sixel *s, struct sixel_image *out)
@@ -419,7 +421,7 @@ int sixel_finish(struct sixel *s, struct sixel_image *out)
 			sb += maxw - w;
 		}
 	}
-	if (popcount_bytes(mask, nbytes) == total) {
+	if (all_set(mask, total)) {
 		free(mask);
 		mask = NULL;
 	}
