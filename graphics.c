@@ -23,8 +23,10 @@
 #define KPLACE_BOX_MAX 4096	/* columns or rows of one placement */
 #define KIMG_MAX 1024	/* kitty images; the handle is the index + 1 */
 
-/* After a=T or a=p the cursor goes down by the box's rows minus this */
-#define KITTY_CURSOR_ROWS_BACK 0
+/* After a=T or a=p the cursor goes down by the box's rows minus this:
+ * kitty leaves it on the last row of the box, and chafa, timg and icat
+ * end with a line feed of their own */
+#define KITTY_CURSOR_ROWS_BACK 1
 
 #define Z_UNDER_BG (-1073741824)	/* z below this: under cell backgrounds too */
 
@@ -621,10 +623,15 @@ static enum kitty_err put_placement(struct gfx *g, uint32_t h,
 		 * and move the others in the array */
 		int down = np->rows - KITTY_CURSOR_ROWS_BACK, cols = np->cols;
 
-		/* the scrolls move the placement with the text */
+		/* the scrolls move the placement with the text; past the
+		 * right edge the cursor goes to the start of the next line,
+		 * as in kitty */
 		if (down > 0)
 			tsm_screen_move_down(g->scr, down, true);
-		tsm_screen_move_right(g->scr, cols);
+		if (x + cols >= tsm_screen_get_width(g->scr))
+			tsm_screen_newline(g->scr);
+		else
+			tsm_screen_move_right(g->scr, cols);
 	}
 	return KITTY_OK;
 }

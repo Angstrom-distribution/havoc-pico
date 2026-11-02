@@ -404,9 +404,11 @@ def put(run, scr, im, col, row, keys="", fmt=32, chunk=None, zl=False,
     if p.anon:
         scr.anon_replace(p)
     if kw.get("C") != 1:
-        room = scr.rows - 1 - row
-        if p.rows > room:
-            scr.lf(p.rows - room)
+        # as kitty: down to the last row of the box and right of it, to
+        # the next line past the right edge
+        last = row + p.rows - 1 + (1 if col + p.cols >= scr.cols else 0)
+        if last > scr.rows - 1:
+            scr.lf(last - (scr.rows - 1))
     return p
 
 
@@ -428,8 +430,9 @@ def sc_basic(r):
     r.mark()
     r.feed(E + "[6n")
     r.sync()
-    # 11 x 5 cells; the cursor goes right by 11 and down by 5
-    check(r.since() == b"\x1b[6;12R", "basic: cursor %r" % r.since())
+    # 11 x 5 cells; the cursor goes right by 11 and down by 4, to the
+    # last row of the picture
+    check(r.since() == b"\x1b[5;12R", "basic: cursor %r" % r.since())
     d = r.debug()
     check(d and d["kitty"] == 1 and d["pm"] == 1 and d["pixels"] == 3072,
           "basic: debug %r" % d)
@@ -441,6 +444,14 @@ def sc_basic(r):
     r.sync()
     check(r.since().endswith(b"\x1b[20;5R"), "basic: C=1 cursor %r" % r.since())
     step(r, scr, "second")
+    # a box that ends at the right edge: the cursor goes to the start of
+    # the line under its last row
+    put(r, scr, mkimg(12, 20, 5), COLS - 2, 10, i=13)
+    r.mark()
+    r.feed(E + "[6n")
+    r.sync()
+    check(r.since().endswith(b"\x1b[13;1R"), "basic: wrap cursor %r" % r.since())
+    step(r, scr, "wrap")
     # 24-bit pixels
     put(r, scr, mkimg(40, 30, 3), 20, 2, fmt=24, i=9)
     step(r, scr, "rgb")
@@ -1295,8 +1306,10 @@ def sc_tools(r):
         r.snaps["chafa"] = img.tobytes()
         r.feed(E + "[6n")
         r.sync()
-        check(r.since().endswith(b"R"), "tools: chafa cursor %r" % r.since())
-        print("note: chafa leaves the cursor at %r" % r.since()[-8:])
+        # 5 rows: the last row of the picture, then chafa's line feed (the
+        # pty is raw, so no carriage return)
+        check(r.since().endswith(b"\x1b[6;12R"), "tools: chafa cursor %r" %
+              r.since())
     if which("timg"):
         s = subprocess.run(["timg", "-p", "kitty", "-g", "11x5", png_path],
                            capture_output=True, check=True).stdout
