@@ -329,15 +329,18 @@ static void handle_tty(int ev)
 	int len = 0;
 
 	if (ev & POLLIN) {
-		/* a picture is many bytes; fewer reads, fewer wake-ups */
 #if HAVE_GRAPHICS
+		/* a picture is many bytes: fewer reads and redraws while one
+		 * arrives; with pictures off the reads stay as they were */
 		char data[4096];
+		size_t size = gfx_enabled(term.gfx) ? sizeof(data) : 256;
 #else
 		char data[256];
+		size_t size = sizeof(data);
 #endif
 
 		term.need_redraw = true;
-		len = read(term.master_fd, data, sizeof(data));
+		len = read(term.master_fd, data, size);
 
 		if (len < 0) {
 			error("could not read from pty");
