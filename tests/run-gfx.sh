@@ -2,7 +2,8 @@
 # Window tests of the picture code: havoc built with HAVOC_SIXEL=1 and the
 # sanitizers runs in the fake compositor (tests/fake-compositor.c) and is
 # checked by graphics.py. Also builds with every HAVOC_* variable at 0 and
-# checks that the picture code is not in the binary.
+# checks that the picture code is not in the binary, and fuzzes the store
+# (tests/fuzz-gfx.c) for FUZZ_SECONDS (default 60, 0 skips it).
 # Run it in the container, from anywhere:  sh tests/run-gfx.sh [scenario ...]
 #
 # Needs gcc, make, pkg-config, wayland-scanner, wayland-protocols, the
@@ -57,6 +58,37 @@ fi
 copy "$work/kitty"
 make -C "$work/kitty" HAVOC_KITTY=1 CFLAGS="-g -O1 -Wall" >"$work/kitty.log" 2>&1 || { cat "$work/kitty.log"; exit 1; }
 "$work/kitty/havoc" -v
+
+# the store with a real screen and decoder under libFuzzer, seeded with the
+# vectors behind a cap and cell-size header and window actions between them
+FUZZ_SECONDS=${FUZZ_SECONDS:-60}
+if [ "$FUZZ_SECONDS" -gt 0 ] && command -v clang >/dev/null &&
+	clang -g -O1 -w -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined \
+		-DHAVOC_SIXEL=1 -DHAVOC_KITTY=0 -DHAVOC_PNG=0 -DVERSION='"0.7.0-git"' \
+		-D_XOPEN_SOURCE=700 $(pkg-config --cflags xkbcommon) -I"$top" \
+		-o "$work/fuzz-gfx" "$top/tests/fuzz-gfx.c" "$top/sixel.c" "$top"/tsm/*.c \
+		2>"$work/fuzz-cc.log"; then
+	mkdir "$work/corpus"
+	n=0
+	for f in "$top"/tests/vectors/sixel/*.bin; do
+		n=$((n + 1))
+		{ printf '\200\026'; cat "$f"; printf '\001\000\001\011\001\002\001\063\001\000'
+		  cat "$f"; printf '\001\006'; } >"$work/corpus/v$n"
+		{ printf '\010\046\033[?1049h'; cat "$f"; printf '\033[?1049l\001\000'
+		  cat "$f"; printf '\033[2J\033[3J\001\000'; } >"$work/corpus/a$n"
+	done
+	if (cd "$work" && ./fuzz-gfx -max_total_time="$FUZZ_SECONDS" -max_len=65536 \
+		-print_final_stats=1 corpus >fuzz.log 2>&1); then
+		echo "fuzz-gfx: $FUZZ_SECONDS s, no finding"
+		grep "stat::number_of_executed_units" "$work/fuzz.log"
+	else
+		tail -40 "$work/fuzz.log" >&2
+		echo "FAIL: fuzz-gfx" >&2
+		exit 1
+	fi
+else
+	echo "fuzz-gfx: skipped (FUZZ_SECONDS=0 or no clang with libFuzzer)"
+fi
 
 export XDG_RUNTIME_DIR=$work
 export PYTHONDONTWRITEBYTECODE=1
