@@ -1,9 +1,9 @@
 #!/bin/sh
 # Sixel decoder tests: built-in cases, every vector against the reference
-# decoder and the synthetic vectors.
+# decoder, the synthetic vectors, then a fuzzing run.
 #   sh tests/run-sixel.sh
 #   REGEN=1 FUZZ_SECONDS=10 sh tests/run-sixel.sh
-# Needs gcc and python3 with PIL.
+# Needs gcc, clang with libFuzzer (libclang-rt-dev) and python3 with PIL.
 set -e
 root=$(cd "$(dirname "$0")/.." && pwd)
 t=$root/tests
@@ -39,4 +39,10 @@ for f in "$v"/*.bin "$tmp/synthetic.bin"; do
 done
 [ $fail = 0 ] || { echo "FAILED: vectors differ"; exit 1; }
 
+echo "== fuzzing ${FUZZ_SECONDS:-60} s"
+clang -g -O1 -Wall -Wextra -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined \
+	-o "$tmp/fuzz-sixel" "$t/fuzz-sixel.c" "$root/sixel.c"
+mkdir "$tmp/corpus"
+python3 -I "$t/tools/sixel_seeds.py" "$tmp/corpus" "$v"/*.bin "$tmp/synthetic.bin"
+"$tmp/fuzz-sixel" -max_total_time="${FUZZ_SECONDS:-60}" -max_len=65536 "$tmp/corpus" 2>&1 | tail -n 4
 echo "PASSED"
