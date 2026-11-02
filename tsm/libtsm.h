@@ -128,7 +128,21 @@ struct tsm_screen_attr {
 	unsigned int inverse : 1;	/* inverse colors */
 	unsigned int protect : 1;	/* cannot be erased */
 	unsigned int blink : 1;		/* blinking character */
+#if HAVOC_SIXEL
+	uint32_t pic;			/* 0, or TSM_PIC(slot, col, row) */
+#endif
 };
+
+#if HAVOC_SIXEL
+/* A cell can hold one tile of a picture the caller keeps: its slot and the
+ * tile's column and row inside the picture. */
+#define TSM_PIC(slot, col, row) \
+	((uint32_t)(slot) << 24 | (uint32_t)(row) << 12 | (uint32_t)(col))
+#define TSM_PIC_SLOT(p)	((p) >> 24)
+#define TSM_PIC_ROW(p)	((p) >> 12 & 0xfff)
+#define TSM_PIC_COL(p)	((p) & 0xfff)
+#define TSM_PIC_MAX	4096		/* columns or rows of one picture */
+#endif
 
 typedef void (*tsm_screen_draw_cb) (struct tsm_screen *con,
 				    uint32_t id,
@@ -182,6 +196,40 @@ typedef void (*tsm_screen_event_cb)(struct tsm_screen *con,
 				    void *data);
 void tsm_screen_set_event_cb(struct tsm_screen *con, tsm_screen_event_cb cb,
 			     void *data);
+
+#if HAVOC_SIXEL
+#define TSM_PIC_CURSOR_RIGHT	0x01
+
+/* Put slot's cols x rows tiles at the cursor. A pending wrap first goes to
+ * column 0 of the next line (auto-wrap on) or stays in the last column.
+ * Each row: the cells from the cursor column to the right margin, at most
+ * cols, become blank cells with attr (pic set per cell); a wide character
+ * cut by the first or last tile column is blanked (its other half with
+ * def_attr). Between rows a line feed, scrolling at the bottom margin. The
+ * cursor then goes to row cursor_row (0-based, clamped to 0 when that row
+ * scrolled off) at the start column, or with TSM_PIC_CURSOR_RIGHT to the
+ * column after the picture, wrapping to column 0 of the next line (with
+ * scroll) past the right margin. Returns 0, or -EINVAL for slot not in
+ * 1..255, cols or rows not in 1..TSM_PIC_MAX. */
+int tsm_screen_place_picture(struct tsm_screen *con,
+			     const struct tsm_screen_attr *attr,
+			     unsigned int slot, int cols, int rows,
+			     int cursor_row, unsigned int flags);
+
+enum {
+	TSM_PIC_MAIN,	/* the main screen's lines */
+	TSM_PIC_ALT,	/* the alternate screen's lines */
+	TSM_PIC_SB,	/* the scrollback */
+	TSM_PIC_VIEW,	/* the lines drawn now (scrollback in view + screen) */
+	TSM_PIC_SETS
+};
+/* used[set][slot / 8] bit (slot % 8): a cell refers to slot. Looks only at
+ * lines with has_pic and clears has_pic on those that hold no tile. */
+void tsm_screen_pictures_used(struct tsm_screen *con,
+			      uint8_t used[TSM_PIC_SETS][32]);
+/* Clear pic in every cell that refers to slot, keeping the cell's colours. */
+void tsm_screen_drop_picture(struct tsm_screen *con, unsigned int slot);
+#endif
 
 int tsm_screen_get_sb_count(struct tsm_screen *con);
 /* scrollback lines shown above the screen's first row: 0 unless scrolled
