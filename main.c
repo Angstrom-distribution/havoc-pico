@@ -1267,6 +1267,7 @@ static void paint_layers8(struct buffer *buffer, int x, int y, int w, int vis)
 	static uint32_t *tmp;
 	static uint8_t *phase;
 	static size_t tmplen;
+	const struct cell_key *k = &term.cur[y * term.col + x];
 	uint8_t *dst = buffer->data;
 	int sw = vis * term.cwidth;
 
@@ -1278,6 +1279,16 @@ static void paint_layers8(struct buffer *buffer, int x, int y, int w, int vis)
 		phase = malloc(tmplen);
 		if (tmp == NULL || phase == NULL)
 			abort();
+	}
+	/* an emoji is converted without adding slots (GFX_PHASE_NEAREST),
+	 * so its backgrounds get theirs first, as in paint_cell8; inverse
+	 * turns c into 255 - c here (C8 windows are opaque) */
+	if (k->picture) {
+		int c;
+
+		for (c = 0; c < vis; ++c)
+			c8_get(&term.colours, k[c].bg ^
+			       (k[c].kflags & KF_INV ? 0xffffff : 0));
 	}
 	memset(phase, 0, (size_t)sw * term.cheight);
 	compose_layers(tmp, sw, phase, sw, x, y, w, vis);
