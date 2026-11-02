@@ -30,6 +30,7 @@
 #include "emoji.h"
 #include "pixfont.h"
 #include "c8.h"
+#include "graphics.h"
 #ifdef HAVE_PICOWL_PALETTE
 #include "picowl-palette-v1.h"
 #else
@@ -69,8 +70,23 @@ struct cell_key {
 	/* drawn from an emoji pack: whether it is depends on the pack and the
 	 * cell size, not only on the character */
 	uint8_t picture;
+#if HAVOC_SIXEL
+	/* only on a cell with a sixel tile: KF_*, and which picture it is
+	 * (a slot is reused for another one) */
+	uint8_t kflags;
+	uint8_t pad;
+	uint32_t pic, pgen;
+#else
 	uint8_t pad[2];
+#endif
 };
+
+#if HAVOC_SIXEL
+#define KF_INV 0x01	/* the tile is drawn inverted (cursor, selection) */
+_Static_assert(sizeof(struct cell_key) == 24, "cell_key has padding");
+#elif !HAVE_GRAPHICS
+_Static_assert(sizeof(struct cell_key) == 16, "cell_key has padding");
+#endif
 
 enum {
 	CELL_PAINT = 1,
@@ -150,6 +166,9 @@ static struct {
 
 	struct tsm_screen *screen;
 	struct tsm_vte *vte;
+#if HAVE_GRAPHICS
+	struct gfx *gfx;
+#endif
 	unsigned int mods;
 
 	struct xkb_context *xkb_ctx;
@@ -257,6 +276,9 @@ static struct {
 		int font_size;
 		char font_path[512];
 		char font_pixel[16];
+#if HAVE_GRAPHICS
+		struct gfx_config gfx;
+#endif
 	} cfg;
 } term = {
 	.scale = 120,
@@ -273,6 +295,9 @@ static struct {
 	.cfg.font_size = 18,
 	.cfg.font_path = "",
 	.cfg.font_pixel = "",
+#if HAVE_GRAPHICS
+	.cfg.gfx.max_pixels = 524288,
+#endif
 	.opt.app_id = "havoc"
 };
 
@@ -835,6 +860,16 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 
 	memset(k, 0, sizeof(*k));
 	k->width = char_width;
+#if HAVOC_SIXEL
+	if (a->pic) {
+		/* a tile is composed with the plain colours and inverted as a
+		 * whole, so that the picture inverts too */
+		k->pic = a->pic;
+		k->pgen = gfx_pic_gen(term.gfx, a->pic);
+		k->kflags = a->inverse ? KF_INV : 0;
+		inv = 0;
+	}
+#endif
 	k->bg = join(0, a->br ^ inv, a->bg ^ inv, a->bb ^ inv);
 	/* a blank cell has no foreground, so the colour must not tell two
 	 * of them apart; the second half of a wide cell is blank for the
@@ -947,6 +982,38 @@ static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
 	}
 }
 
+#if HAVOC_SIXEL
+/* A tile of a sixel picture over the cell's background; unset pixels of the
+ * picture show the background. Inverse inverts what is composed: with the
+ * alpha a (premultiplied colours), c becomes a - c. */
+static void paint_tile(struct buffer *buffer, int x, int y)
+{
+	const struct cell_key *k = &term.cur[y * term.col + x];
+	uint32_t *dst = buffer->data;
+	struct gfx_target t;
+	int px, py;
+
+	dst += term.margin.top * term.width + term.margin.left;
+	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
+	blank(dst, 1, k->bg >> 16, k->bg >> 8, k->bg, term.cfg.opacity);
+	t.px = dst;
+	t.stride = term.width;
+	t.w = term.cwidth;
+	t.h = term.cheight;
+	gfx_paint(term.gfx, GFX_TILE, k->pic, &t);
+
+	if (!(k->kflags & KF_INV))
+		return;
+	for (py = 0; py < term.cheight; ++py) {
+		uint32_t *r = dst + py * term.width;
+
+		for (px = 0; px < term.cwidth; ++px)
+			r[px] = (r[px] & 0xff000000) |
+				((r[px] >> 24) * 0x010101 - (r[px] & 0xffffff));
+	}
+}
+#endif
+
 static void paint_cell(struct buffer *buffer, int x, int y)
 {
 	int i = y * term.col + x;
@@ -970,6 +1037,13 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 		paint_cell8(buffer, x, y, w, vis);
 		return;
 	}
+
+#if HAVOC_SIXEL
+	if (k->pic) {
+		paint_tile(buffer, x, y);
+		return;
+	}
+#endif
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
@@ -2857,6 +2931,11 @@ retry:
 
 	if (tsm_vte_new(&term.vte, term.screen, wcb, NULL) < 0)
 		fail(evte, "failed to create tsm vte");
+#if HAVE_GRAPHICS
+	term.gfx = gfx_new(term.screen, term.vte, &term.cfg.gfx);
+	gfx_set_geometry(term.gfx, term.cwidth, term.cheight, term.cfg.col,
+			 term.cfg.row);
+#endif
 
 	term.surf = wl_compositor_create_surface(term.cp);
 	if (term.surf == NULL)
@@ -2994,6 +3073,9 @@ etoplvl:
 exdgsurf:
 	wl_surface_destroy(term.surf);
 esurf:
+#if HAVE_GRAPHICS
+	gfx_free(term.gfx);
+#endif
 	tsm_vte_unref(term.vte);
 evte:
 	tsm_screen_unref(term.screen);
