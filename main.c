@@ -298,7 +298,7 @@ static struct {
 	.cfg.font_path = "",
 	.cfg.font_pixel = "",
 #if HAVE_GRAPHICS
-	.cfg.gfx.max_pixels = 524288,
+	.cfg.gfx.memory = 524288,
 #endif
 	.opt.app_id = "havoc"
 };
@@ -2688,13 +2688,9 @@ static void graphics_config(char *key, char *val)
 		if (strcmp(val, "yes") == 0)
 			fprintf(stderr, "[graphics] sixel is not built in\n");
 #endif
-	} else if (strcmp(key, "shm") == 0) {
+	} else if (strcmp(key, "memory") == 0) {
 #if HAVE_GRAPHICS
-		term.cfg.gfx.shm = strcmp(val, "yes") == 0;
-#endif
-	} else if (strcmp(key, "max_pixels") == 0) {
-#if HAVE_GRAPHICS
-		term.cfg.gfx.max_pixels = cfg_num(val, 10, 0, 16777216);
+		term.cfg.gfx.memory = cfg_num(val, 10, 0, 16777216);
 #endif
 	}
 }

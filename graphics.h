@@ -11,8 +11,7 @@
 
 struct gfx_config {
 	bool sixel;		/* [graphics] sixel */
-	bool shm;		/* [graphics] shm (kitty t=s) */
-	size_t max_pixels;	/* [graphics] max_pixels, all pictures together */
+	size_t memory;		/* [graphics] memory: pixels, all pictures */
 };
 
 struct gfx;

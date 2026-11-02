@@ -1147,7 +1147,7 @@ def main():
     run_scenario("sgr", sc_sgr)
     run_scenario("wide", sc_wide)
     run_scenario("right", sc_right)
-    run_scenario("memory", sc_memory, extra="max_pixels=16000\n")
+    run_scenario("memory", sc_memory, extra="memory=16000\n")
     run_scenario("truncated", sc_truncated)
     run_scenario("replies", sc_replies, runs=(False,))
     run_scenario("replies_off", sc_replies_off, extra="sixel=no\n",

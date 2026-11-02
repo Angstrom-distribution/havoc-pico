@@ -105,7 +105,7 @@ static unsigned int free_index(const struct gfx *g)
 static bool make_room(struct gfx *g, size_t n)
 {
 	uint8_t used[TSM_PIC_SETS][32];
-	size_t cap = g->cfg.max_pixels;
+	size_t cap = g->cfg.memory;
 
 	if (n > cap)
 		return false;
@@ -169,9 +169,9 @@ static bool str_start(void *data, const struct tsm_vte_str_info *info)
 
 	/* whatever is not in view can be given up for this picture */
 	view = pixels_in_view(g);
-	if (view >= g->cfg.max_pixels)
+	if (view >= g->cfg.memory)
 		return false;
-	lim.max_pixels = g->cfg.max_pixels - view;
+	lim.max_pixels = g->cfg.memory - view;
 	if (lim.max_pixels < lim.max_w)
 		return false;
 
@@ -343,7 +343,7 @@ void gfx_debug(const struct gfx *g)
 #if HAVOC_SIXEL
 	if (g && g->debug)
 		fprintf(stderr, "gfx: sixel=%d kitty=0 places=0+0 pixels=%zu/%zu\n",
-			slot_count(g), g->pixels, g->cfg.max_pixels);
+			slot_count(g), g->pixels, g->cfg.memory);
 #else
 	(void)g;
 #endif
