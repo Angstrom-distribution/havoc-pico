@@ -147,6 +147,10 @@ struct tsm_screen {
 	/* code points drawn as two-cell pictures, or NULL */
 	tsm_picture_cb picture_cb;
 
+	/* line moves and screen changes, or NULL */
+	tsm_screen_event_cb event_cb;
+	void *event_data;
+
 	/* color palette */
 	uint8_t palette[256][3];
 	uint8_t foreground[3];
@@ -167,6 +171,7 @@ struct tsm_screen {
 
 void screen_cell_init(struct tsm_screen *con, struct cell *cell,
 		      struct tsm_screen_attr *attr);
+void screen_emit_reset(struct tsm_screen *con);
 
 void tsm_screen_set_opts(struct tsm_screen *scr, unsigned int opts);
 void tsm_screen_reset_opts(struct tsm_screen *scr, unsigned int opts);
