@@ -70,21 +70,35 @@ struct cell_key {
 	/* drawn from an emoji pack: whether it is depends on the pack and the
 	 * cell size, not only on the character */
 	uint8_t picture;
-#if HAVOC_SIXEL
-	/* only on a cell with a sixel tile: KF_*, and which picture it is
-	 * (a slot is reused for another one) */
+#if HAVE_GRAPHICS
+	/* only on a cell with a picture: KF_* */
 	uint8_t kflags;
 	uint8_t pad;
-	uint32_t pic, pgen;
 #else
 	uint8_t pad[2];
 #endif
+#if HAVOC_SIXEL
+	/* the sixel tile and which picture it is (a slot is reused for
+	 * another one) */
+	uint32_t pic, pgen;
+#endif
+#if HAVOC_KITTY
+	/* a hash of the kitty placements over the cell, 0: none */
+	uint32_t klayer;
+#endif
 };
 
-#if HAVOC_SIXEL
-#define KF_INV 0x01	/* the tile is drawn inverted (cursor, selection) */
+#if HAVE_GRAPHICS
+#define KF_INV 0x01	/* composed with plain colours, drawn inverted (cursor, selection) */
+#define KF_DEFBG 0x02	/* the background is the default one */
+#endif
+#if HAVOC_SIXEL && HAVOC_KITTY
+_Static_assert(sizeof(struct cell_key) == 28, "cell_key has padding");
+#elif HAVOC_SIXEL
 _Static_assert(sizeof(struct cell_key) == 24, "cell_key has padding");
-#elif !HAVE_GRAPHICS
+#elif HAVOC_KITTY
+_Static_assert(sizeof(struct cell_key) == 20, "cell_key has padding");
+#else
 _Static_assert(sizeof(struct cell_key) == 16, "cell_key has padding");
 #endif
 
@@ -153,6 +167,11 @@ static struct {
 	struct cell_key *cur, *shown;
 	uint32_t *cur_ch;
 	uint8_t *flags;
+#if HAVOC_KITTY
+	/* kitty placements over each cell and which layers (gfx_frame) */
+	uint32_t *klayer;
+	uint8_t *lmask;
+#endif
 	bool shown_valid;
 	uint32_t shown_margin;
 	bool full_redraw;
@@ -872,14 +891,41 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 
 	memset(k, 0, sizeof(*k));
 	k->width = char_width;
+#if HAVE_GRAPHICS
+	{
+		uint32_t kl = 0;
+
+#if HAVOC_KITTY
+		kl = term.klayer ? term.klayer[i] : 0;
+		k->klayer = kl;
+#endif
 #if HAVOC_SIXEL
-	if (a->pic) {
-		/* a tile is composed with the plain colours and inverted as a
-		 * whole, so that the picture inverts too */
-		k->pic = a->pic;
-		k->pgen = gfx_pic_gen(term.gfx, a->pic);
-		k->kflags = a->inverse ? KF_INV : 0;
-		inv = 0;
+		if (a->pic) {
+			k->pic = a->pic;
+			k->pgen = gfx_pic_gen(term.gfx, a->pic);
+		}
+#endif
+		/* a C8 window draws no pictures yet (paint_cell8): there
+		 * the cell is plain, so that the cursor still inverts it */
+		if (!term.c8_on && (kl
+#if HAVOC_SIXEL
+		    || a->pic
+#endif
+		    )) {
+			/* a cell with a picture is composed with the plain
+			 * colours and inverted as a whole, so that the
+			 * picture inverts too */
+			k->kflags = a->inverse ? KF_INV : 0;
+			if (kl) {
+				const uint8_t *bg =
+					tsm_screen_get_background(term.screen);
+
+				if (a->br == bg[0] && a->bg == bg[1] &&
+				    a->bb == bg[2])
+					k->kflags |= KF_DEFBG;
+			}
+			inv = 0;
+		}
 	}
 #endif
 	k->bg = join(0, a->br ^ inv, a->bg ^ inv, a->bb ^ inv);
@@ -994,35 +1040,182 @@ static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
 	}
 }
 
-#if HAVOC_SIXEL
-/* A tile of a sixel picture over the cell's background; unset pixels of the
- * picture show the background. Inverse inverts what is composed: with the
- * alpha a (premultiplied colours), c becomes a - c. */
-static void paint_tile(struct buffer *buffer, int x, int y)
+#if HAVE_GRAPHICS
+/* The glyph of a cell over what is there: only the pixels the glyph sets,
+ * blended by the outline font's coverage. */
+static void print_over(uint32_t *dst, int w, int vis, u8 fr, u8 fg, u8 fb,
+		       const unsigned char *glyph)
 {
-	const struct cell_key *k = &term.cur[y * term.col + x];
+	int i;
+	int h = term.cheight;
+
+	w *= term.cwidth;
+	vis *= term.cwidth;
+	while (h--) {
+		for (i = 0; i < vis; ++i) {
+			u8 fa = glyph[i];
+
+			if (fa == 0) {
+				continue;
+			} else if (fa == 0xff) {
+				dst[i] = join(0xff, fr, fg, fb);
+			} else {
+				u8 ca = 255 - fa;
+				uint32_t d = dst[i];
+				uint32_t a = fa + mul(d >> 24, ca);
+				uint32_t r = mul(fr, fa) + mul(d >> 16 & 255, ca);
+				uint32_t g = mul(fg, fa) + mul(d >> 8 & 255, ca);
+				uint32_t b = mul(fb, fa) + mul(d & 255, ca);
+
+				dst[i] = join(a > 255 ? 255 : a,
+					      r > 255 ? 255 : r,
+					      g > 255 ? 255 : g,
+					      b > 255 ? 255 : b);
+			}
+		}
+
+		glyph += w;
+		dst += term.width;
+	}
+}
+
+static void print1_over(uint32_t *dst, int vis, int k, u8 fr, u8 fg, u8 fb,
+			const uint8_t *rows, int bpr)
+{
+	uint32_t fgc = join(0xff, fr, fg, fb);
+	int h = term.cheight;
+	int y, x, ky = 0;
+
+	/* the zoom repeats each glyph pixel k times; counted, not divided,
+	 * since the target cores have no divide instruction */
+	vis *= term.cwidth;
+	for (y = 0; y < h; ++y) {
+		int sx = 0, kx = 0;
+
+		for (x = 0; x < vis; ++x) {
+			if (rows[sx >> 3] & 0x80 >> (sx & 7))
+				dst[x] = fgc;
+			if (++kx == k) {
+				kx = 0;
+				sx++;
+			}
+		}
+		dst += term.width;
+		if (++ky == k) {
+			ky = 0;
+			rows += bpr;
+		}
+	}
+}
+
+/* A kitty layer on each of the vis cells of a glyph from (x, y). */
+static void kitty_layer(struct buffer *buffer, uint32_t *dst, int x, int y,
+			int vis, enum gfx_layer layer, uint8_t bit)
+{
+#if HAVOC_KITTY
+	int c;
+
+	for (c = 0; c < vis; ++c) {
+		int i = y * term.col + x + c;
+		struct gfx_target t;
+
+		if (!(term.lmask[i] & bit))
+			continue;
+		t.px = dst + c * term.cwidth;
+		t.stride = term.width;
+		t.w = term.cwidth;
+		t.h = term.cheight;
+		gfx_paint(term.gfx, layer, x + c, y, 0, &t);
+	}
+#endif
+}
+
+/* A cell with a sixel tile or under kitty placements, bottom to top: the
+ * plain background, kitty pictures with z below -2^30 (only on the default
+ * background), those with z below 0, the cell's content (the tile, an
+ * emoji, or the glyph's foreground pixels alone), pictures with z of 0 and
+ * up. Inverse inverts what is composed: with the alpha a (premultiplied
+ * colours), c becomes a - c. */
+static void paint_layers(struct buffer *buffer, int x, int y, int w, int vis)
+{
+	int i = y * term.col + x;
+	const struct cell_key *k = &term.cur[i];
 	uint32_t *dst = buffer->data;
-	struct gfx_target t;
-	int px, py;
+	int c, px, py;
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
-	blank(dst, 1, k->bg >> 16, k->bg >> 8, k->bg, term.cfg.opacity);
-	t.px = dst;
-	t.stride = term.width;
-	t.w = term.cwidth;
-	t.h = term.cheight;
-	gfx_paint(term.gfx, GFX_TILE, k->pic, &t);
+	blank(dst, vis, k->bg >> 16, k->bg >> 8, k->bg, term.cfg.opacity);
 
-	if (!(k->kflags & KF_INV))
-		return;
-	for (py = 0; py < term.cheight; ++py) {
-		uint32_t *r = dst + py * term.width;
+	for (c = 0; c < vis; ++c)
+		if (k[c].kflags & KF_DEFBG)
+			kitty_layer(buffer, dst + c * term.cwidth, x + c, y, 1,
+				    GFX_UNDER_BG, GFX_HAS_UNDER_BG);
+	kitty_layer(buffer, dst, x, y, vis, GFX_UNDER_TEXT, GFX_HAS_UNDER_TEXT);
 
-		for (px = 0; px < term.cwidth; ++px)
-			r[px] = (r[px] & 0xff000000) |
-				((r[px] >> 24) * 0x010101 - (r[px] & 0xffffff));
+#if HAVOC_SIXEL
+	if (k->pic) {
+		struct gfx_target t;
+
+		t.px = dst;
+		t.stride = term.width;
+		t.w = term.cwidth;
+		t.h = term.cheight;
+		gfx_paint(term.gfx, GFX_TILE, x, y, k->pic, &t);
+	} else
+#endif
+	if (k->picture) {
+		const uint8_t *rec;
+		unsigned pxl;
+
+		/* half a picture says nothing; see paint_cell */
+		if (x + 1 < term.col && k[1].width == 0 &&
+		    (rec = emoji_image(term.cur_ch[i], term.cwidth,
+				       term.cheight, &pxl)))
+			emoji_paint(dst, term.width, term.cwidth, term.cheight,
+				    k->bg, k[1].bg, term.cfg.opacity, rec, pxl);
+	} else if (k->id != 0) {
+		if (pixfont_active()) {
+			int bpr;
+			const uint8_t *g = pixfont_glyph(term.cur_ch[i], w, &bpr);
+
+			print1_over(dst, vis, pixfont_multiple(), k->fg >> 16,
+				    k->fg >> 8, k->fg, g, bpr);
+		} else {
+			unsigned char *g = get_glyph(k->id, term.cur_ch[i], w);
+
+			print_over(dst, w, vis, k->fg >> 16, k->fg >> 8, k->fg,
+				   g);
+		}
 	}
+
+	kitty_layer(buffer, dst, x, y, vis, GFX_OVER_TEXT, GFX_HAS_OVER_TEXT);
+
+	for (c = 0; c < vis; ++c) {
+		if (!(k[c].kflags & KF_INV))
+			continue;
+		for (py = 0; py < term.cheight; ++py) {
+			uint32_t *r = dst + py * term.width + c * term.cwidth;
+
+			for (px = 0; px < term.cwidth; ++px)
+				r[px] = (r[px] & 0xff000000) |
+					((r[px] >> 24) * 0x010101 -
+					 (r[px] & 0xffffff));
+		}
+	}
+}
+
+/* Whether the cell is drawn by paint_layers. */
+static bool has_layers(const struct cell_key *k)
+{
+	return
+#if HAVOC_SIXEL
+	       k->pic ||
+#endif
+#if HAVOC_KITTY
+	       k->klayer ||
+#endif
+	       false;
 }
 #endif
 
@@ -1050,9 +1243,9 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 		return;
 	}
 
-#if HAVOC_SIXEL
-	if (k->pic) {
-		paint_tile(buffer, x, y);
+#if HAVE_GRAPHICS
+	if (has_layers(k)) {
+		paint_layers(buffer, x, y, w, vis);
 		return;
 	}
 #endif
@@ -1357,6 +1550,10 @@ static void redraw(void)
 
 	c8_update();
 	ti_update_cursor();
+#if HAVOC_KITTY
+	/* before the draw: collect_cell puts the layers into the keys */
+	gfx_frame(term.gfx, term.klayer, term.lmask);
+#endif
 	tsm_screen_draw(term.screen, collect_cell, NULL);
 
 	/* What the compositor shows is only known to be what we last
@@ -2307,6 +2504,14 @@ static void do_configure(void)
 		free(term.shown);
 		free(term.cur_ch);
 		free(term.flags);
+#if HAVOC_KITTY
+		free(term.klayer);
+		free(term.lmask);
+		term.klayer = calloc(col * row, sizeof(*term.klayer));
+		term.lmask = calloc(col * row, sizeof(*term.lmask));
+		if (!term.klayer || !term.lmask)
+			abort();
+#endif
 		term.cur = calloc(col * row, sizeof(*term.cur));
 		term.shown = calloc(col * row, sizeof(*term.shown));
 		term.cur_ch = calloc(col * row, sizeof(*term.cur_ch));
@@ -2717,6 +2922,17 @@ static void graphics_config(char *key, char *val)
 #else
 		if (strcmp(val, "yes") == 0)
 			fprintf(stderr, "[graphics] sixel is not built in\n");
+#endif
+	} else if (strcmp(key, "kitty") == 0) {
+#if HAVOC_KITTY
+		term.cfg.gfx.kitty = strcmp(val, "yes") == 0;
+#else
+		if (strcmp(val, "yes") == 0)
+			fprintf(stderr, "[graphics] kitty is not built in\n");
+#endif
+	} else if (strcmp(key, "kitty shm") == 0) {
+#if HAVOC_KITTY
+		term.cfg.gfx.kitty_shm = strcmp(val, "yes") == 0;
 #endif
 	} else if (strcmp(key, "memory") == 0) {
 #if HAVE_GRAPHICS
