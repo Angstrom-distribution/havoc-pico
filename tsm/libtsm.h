@@ -348,6 +348,29 @@ struct tsm_vte_str_ops {
 void tsm_vte_set_str_ops(struct tsm_vte *vte,
 			 const struct tsm_vte_str_ops *ops, void *data);
 
+/* Write a reply to the program, in order with the vte's own replies. */
+void tsm_vte_reply(struct tsm_vte *vte, const char *u8, size_t len);
+
+/* The vte's current attributes (SGR state), for pictures placed by the
+ * caller with the current background. */
+void tsm_vte_get_attr(struct tsm_vte *vte, struct tsm_screen_attr *out);
+
+/* What the replies say about pictures. NULL (the state after
+ * tsm_vte_new) restores the replies of before: no 4 in DA1, no
+ * XTSMGRAPHICS, CSI t, XTVERSION reply, CSI ? S scrolls, ED 3 ignored. */
+struct tsm_vte_graphics {
+	bool sixel;			/* DA1 4, XTSMGRAPHICS */
+	unsigned int cell_w, cell_h;	/* pixels */
+	unsigned int registers;		/* 256 */
+	const char *version;		/* "0.7.0-git": XTVERSION havoc(...) */
+};
+void tsm_vte_set_graphics(struct tsm_vte *vte,
+			  const struct tsm_vte_graphics *g);
+
+/* modes for picture consumers */
+#define TSM_VTE_SIXEL_CURSOR_RIGHT	0x01	/* DECSET 8452 */
+unsigned int tsm_vte_get_graphics_flags(struct tsm_vte *vte);
+
 /** @} */
 
 #ifdef __cplusplus

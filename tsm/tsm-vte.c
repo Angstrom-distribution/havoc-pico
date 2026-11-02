@@ -141,6 +141,7 @@ enum parser_action {
 #define FLAG_PREPEND_ESCAPE			0x00010000 /* Prepend escape character to next output */
 #define FLAG_TITE_INHIBIT_MODE			0x00020000 /* Prevent switching to alternate screen buffer */
 #define FLAG_BRACKETED_PASTE_MODE		0x00040000
+#define FLAG_SIXEL_CURSOR_RIGHT			0x00080000 /* DECSET 8452 */
 
 #define ENDPASTE "\e[201~"
 
@@ -180,6 +181,11 @@ struct tsm_vte {
 	char str_buf[STR_BUFSIZE];
 	unsigned int str_len;
 	unsigned int str_marks;	/* TSM_VTE_STR_* seen before the final byte */
+
+	/* what the replies say about pictures; see tsm_vte_set_graphics() */
+	bool gfx_set;
+	struct tsm_vte_graphics gfx;
+	char gfx_version[32];
 
 	struct tsm_screen_attr def_attr;
 	struct tsm_screen_attr cattr;
@@ -375,6 +381,39 @@ void tsm_vte_get_def_attr(struct tsm_vte *vte, struct tsm_screen_attr *out)
 	memcpy(out, &vte->def_attr, sizeof(*out));
 }
 
+SHL_EXPORT
+void tsm_vte_get_attr(struct tsm_vte *vte, struct tsm_screen_attr *out)
+{
+	memcpy(out, &vte->cattr, sizeof(*out));
+}
+
+SHL_EXPORT
+void tsm_vte_set_graphics(struct tsm_vte *vte,
+			  const struct tsm_vte_graphics *g)
+{
+	if (!g) {
+		vte->gfx_set = false;
+		return;
+	}
+
+	vte->gfx = *g;
+	vte->gfx_version[0] = 0;
+	if (g->version) {
+		strncpy(vte->gfx_version, g->version,
+			sizeof(vte->gfx_version) - 1);
+		vte->gfx_version[sizeof(vte->gfx_version) - 1] = 0;
+	}
+	vte->gfx.version = vte->gfx_version;
+	vte->gfx_set = true;
+}
+
+SHL_EXPORT
+unsigned int tsm_vte_get_graphics_flags(struct tsm_vte *vte)
+{
+	return vte->flags & FLAG_SIXEL_CURSOR_RIGHT ?
+		TSM_VTE_SIXEL_CURSOR_RIGHT : 0;
+}
+
 static void write_safe(struct tsm_vte *vte, const char *u8, size_t len)
 {
 	if (vte->pasting) {
@@ -463,6 +502,13 @@ static void vte_write_debug(struct tsm_vte *vte, const char *u8, size_t len,
 	vte_write_debug((_vte), (_u8), (_len), false, __FILE__, __LINE__)
 #define vte_write_raw(_vte, _u8, _len) \
 	vte_write_debug((_vte), (_u8), (_len), true, __FILE__, __LINE__)
+
+SHL_EXPORT
+void tsm_vte_reply(struct tsm_vte *vte, const char *u8, size_t len)
+{
+	if (len)
+		vte_write_raw(vte, u8, len);
+}
 
 static void vte_write_fnkey(struct tsm_vte *vte, bool ss3, unsigned int mods,
 			    int index, char c)
@@ -765,7 +811,10 @@ void tsm_vte_hard_reset(struct tsm_vte *vte)
 
 static void send_primary_da(struct tsm_vte *vte)
 {
-	vte_write(vte, "\e[?62;1;6;9;15c", 15);
+	if (vte->gfx_set && vte->gfx.sixel)
+		vte_write(vte, "\e[?62;1;4;6;9;15c", 17);
+	else
+		vte_write(vte, "\e[?62;1;6;9;15c", 15);
 }
 
 /* execute control character (C0 or C1) */
@@ -1615,6 +1664,9 @@ static void csi_mode(struct tsm_vte *vte, bool set)
 		case 2004:
 			set_reset_flag(vte, set, FLAG_BRACKETED_PASTE_MODE);
 			continue;
+		case 8452: /* sixel: cursor right of the picture */
+			set_reset_flag(vte, set, FLAG_SIXEL_CURSOR_RIGHT);
+			continue;
 		default:
 			llog_debug(vte, "unknown DEC %set-Mode %d",
 				   set?"S":"Res", vte->csi_argv[i]);
@@ -1637,6 +1689,77 @@ static void csi_dev_attr(struct tsm_vte *vte)
 
 	llog_debug(vte, "unhandled DA: %x %d %d %d...", vte->csi_flags,
 		   vte->csi_argv[0], vte->csi_argv[1], vte->csi_argv[2]);
+}
+
+/* XTSMGRAPHICS: CSI ? Pi ; Pa ; Pv S. Reads succeed, sets are refused. */
+static void csi_xtsmgraphics(struct tsm_vte *vte)
+{
+	char buf[64];
+	int pi = vte->csi_argv[0], pa = vte->csi_argv[1];
+	int status, n;
+
+	if (!vte->gfx.sixel)
+		return;
+	if (pi < 0)
+		pi = 0;
+
+	if (pi != 1 && pi != 2) {
+		n = snprintf(buf, sizeof(buf), "\e[?%d;1;0S", pi);
+	} else {
+		/* 1 read, 2 reset, 3 set, 4 read the maximum */
+		status = pa == 3 ? 3 : pa >= 1 && pa <= 4 ? 0 : 2;
+		if (pi == 1)
+			n = snprintf(buf, sizeof(buf), "\e[?1;%d;%uS", status,
+				     vte->gfx.registers);
+		else
+			n = snprintf(buf, sizeof(buf), "\e[?2;%d;%u;%uS",
+				     status,
+				     tsm_screen_get_width(vte->con) *
+					     vte->gfx.cell_w,
+				     tsm_screen_get_height(vte->con) *
+					     vte->gfx.cell_h);
+	}
+	if (n > 0 && (size_t)n < sizeof(buf))
+		vte_write(vte, buf, n);
+}
+
+/* CSI 14 t, CSI 16 t and CSI 18 t */
+static void csi_window_report(struct tsm_vte *vte)
+{
+	char buf[64];
+	int rows = tsm_screen_get_height(vte->con);
+	int cols = tsm_screen_get_width(vte->con);
+	int n;
+
+	if (vte->csi_flags)
+		return;
+
+	switch (vte->csi_argv[0]) {
+	case 14:
+		n = snprintf(buf, sizeof(buf), "\e[4;%u;%ut",
+			     rows * vte->gfx.cell_h, cols * vte->gfx.cell_w);
+		break;
+	case 16:
+		n = snprintf(buf, sizeof(buf), "\e[6;%u;%ut",
+			     vte->gfx.cell_h, vte->gfx.cell_w);
+		break;
+	case 18:
+		n = snprintf(buf, sizeof(buf), "\e[8;%d;%dt", rows, cols);
+		break;
+	default:
+		return;
+	}
+	vte_write(vte, buf, n);
+}
+
+/* XTVERSION: CSI > q */
+static void csi_xtversion(struct tsm_vte *vte)
+{
+	char buf[64];
+	int n;
+
+	n = snprintf(buf, sizeof(buf), "\eP>|havoc(%s)\e\\", vte->gfx_version);
+	vte_write(vte, buf, n);
 }
 
 static void csi_dsr(struct tsm_vte *vte)
@@ -1769,6 +1892,8 @@ static void do_csi(struct tsm_vte *vte, uint32_t data)
 							      protect);
 		else if (vte->csi_argv[0] == 2)
 			tsm_screen_erase_screen(vte->con, protect);
+		else if (vte->csi_argv[0] == 3 && vte->gfx_set)
+			tsm_screen_clear_sb(vte->con);
 		else
 			llog_debug(vte, "unknown parameter to CSI-J: %d",
 				   vte->csi_argv[0]);
@@ -1894,6 +2019,10 @@ static void do_csi(struct tsm_vte *vte, uint32_t data)
 		csi_dsr(vte);
 		break;
 	case 'S': /* SU */
+		if ((vte->csi_flags & CSI_WHAT) && vte->gfx_set) {
+			csi_xtsmgraphics(vte);
+			break;
+		}
 		/* scroll up */
 		num = vte->csi_argv[0];
 		if (num <= 0)
@@ -1906,6 +2035,19 @@ static void do_csi(struct tsm_vte *vte, uint32_t data)
 		if (num <= 0)
 			num = 1;
 		tsm_screen_scroll_down(vte->con, num);
+		break;
+	case 't': /* window reports */
+		if (vte->gfx_set)
+			csi_window_report(vte);
+		else
+			llog_debug(vte, "unhandled CSI sequence %c", data);
+		break;
+	case 'q': /* XTVERSION */
+		if (vte->gfx_set && vte->csi_flags == CSI_GT &&
+		    vte->csi_argv[0] <= 0)
+			csi_xtversion(vte);
+		else
+			llog_debug(vte, "unhandled CSI sequence %c", data);
 		break;
 	default:
 		llog_debug(vte, "unhandled CSI sequence %c", data);
