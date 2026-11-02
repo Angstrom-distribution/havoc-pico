@@ -58,7 +58,7 @@ void kitty_reset(struct kitty *k);
  * of the string is 'G'; anything else makes kitty_put return false and the
  * string is not kitty's), then kitty_end, which returns how many commands
  * finished with it, 0 to 2, in out[] in order: 0 after a chunk with m=1
- * (more to come); 1 for the last chunk or a single command; 2 when this
+ * (more to come; m counts only with t=d); 1 for the last chunk or a single command; 2 when this
  * APC was a new command that ended an unfinished chunked transfer (out[0]
  * is that transfer with ENODATA, out[1] the new command, unless it has
  * m=1 itself: then only out[0]). aborted: the APC was cut; a transfer in

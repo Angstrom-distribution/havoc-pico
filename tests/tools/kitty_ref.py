@@ -195,7 +195,8 @@ def decode(out, vectors, png):
                 lines.append("a=%s i=%d err=ENODATA" %
                              (pending[0].get("a", "t"), num(pending[0], "i")))
                 pending = None
-            if keys.get("a", "t") in "tTq" and num(keys, "m"):
+            if (keys.get("a", "t") in "tTq" and keys.get("t", "d") == "d" and
+                    num(keys, "m")):
                 pending = (keys, [pl])
                 continue
             emit(keys, [pl])

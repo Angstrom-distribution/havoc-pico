@@ -17,7 +17,8 @@ icat-detect          kitten icat --detect-support: three a=q probes (direct,
 icat-kitty           kitten icat of grad64x48.png: the three probes, then
                      t=f (a file path), which havoc refuses
 mpv-kitty-shm        mpv --vo=kitty with shared memory: t=s with m=1 on
-                     every command, so it is one transfer that never ends
+                     every command; m counts only for direct data, so each
+                     command is complete
 
 Not kept: mpv --vo=kitty without shared memory (462 KB). tests/tools/
 kitty_ref.py writes an equivalent stream.

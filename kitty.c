@@ -521,7 +521,9 @@ static void begin_cmd(struct kitty *k)
 		return;
 	}
 	k->chunkable = c.a != 'p' && c.a != 'd';
-	k->more = k->chunkable && c.m != 0;
+	/* only direct data comes in chunks: mpv sends t=s with m=1 on every
+	 * frame and relies on each being complete */
+	k->more = k->chunkable && c.t == 'd' && c.m != 0;
 	k->err = validate(k, &k->cmd);
 	if (k->err || !k->chunkable) {
 		k->discard = true;

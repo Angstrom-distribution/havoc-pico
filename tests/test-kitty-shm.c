@@ -196,6 +196,18 @@ int main(void)
 	CHECK(res[0].cmd.a == 'T');
 	CHECK(!exists(name));
 	clear_res();
+	/* mpv sends m=1 with t=s; the command is complete all the same */
+	fd = make(name, px, sizeof px);
+	close(fd);
+	{
+		char nb[600], line[800];
+
+		b64((const uint8_t *)name, strlen(name), nb);
+		snprintf(line, sizeof line, "Ga=T,t=s,f=24,s=8,v=8,C=1,q=2,m=1;%s", nb);
+		CHECK(feed_apc(k, line, strlen(line), 0, false) == 1);
+		CHECK(res[0].err == KITTY_OK && res[0].img.w == 8 && !exists(name));
+		clear_res();
+	}
 	/* a larger object than needed: the first s*v*3 bytes */
 	{
 		uint8_t big[1000];

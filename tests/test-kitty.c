@@ -538,6 +538,13 @@ static void chunks(void)
 	sprintf(s, "Gm=0;%s", b + 64);
 	CHECK(cmd(k, s) == 1 && res[0].err == KITTY_EINVAL);
 	clear_res();
+	/* m=1 counts only for direct data */
+	CHECK(cmd(k, "Ga=T,t=s,f=24,s=8,v=8,i=6,m=1;bXB2LWtpdHR5") == 1);
+	CHECK(res[0].err == KITTY_EBADF && res[0].cmd.i == 6);
+	clear_res();
+	CHECK(cmd(k, "Ga=t,t=f,f=24,s=8,v=8,i=6,m=1;L3RtcC94") == 1);
+	CHECK(res[0].err == KITTY_EBADF);
+	clear_res();
 	/* an APC cut off in the control part */
 	CHECK(feed_apc(k, "Ga=t,f=2", 8, 0, true) == 0);
 
