@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "tsm/libtsm.h"
+#include "c8.h"
 
 struct gfx_config {
 	bool sixel;		/* [graphics] sixel */
@@ -61,7 +62,15 @@ struct gfx_target {
 	uint32_t *px;		/* the cell's top left pixel */
 	int stride;		/* pixels from one row to the next */
 	int w, h;		/* pixels to paint: the cell, or what fits */
+	/* C8 drawing: one byte for each pixel that is written for the pixels
+	 * the picture sets, GFX_PHASE_PICTURE | (y & 3) << 2 | (x & 3) with x
+	 * and y counted from the picture's corner. NULL in XRGB drawing. */
+	uint8_t *phase;
+	int phase_stride;
 };
+
+#define GFX_PHASE_PICTURE	0x80	/* | phase: dither */
+#define GFX_PHASE_NEAREST	0x40	/* nearest cube entry or known slot, no new slot */
 
 /* Composite one layer of the view cell (x, y) over what t holds: opaque
  * picture pixels replace, ones with alpha blend over (the colours are
@@ -70,6 +79,13 @@ struct gfx_target {
  * pic: the cell's sixel tile, for GFX_TILE. */
 void gfx_paint(struct gfx *g, enum gfx_layer layer, int x, int y,
 	       uint32_t pic, const struct gfx_target *t);
+
+/* An XRGB scratch to C8, pixel by pixel: phase 0 through c8_get (text,
+ * backgrounds), GFX_PHASE_NEAREST through c8_find, GFX_PHASE_PICTURE through
+ * c8_dither (no slot). Divide-free. */
+void gfx_to_c8(const uint32_t *src, int sstride, const uint8_t *phase,
+	       int pstride, int w, int h, uint8_t *dst, int dstride,
+	       struct c8_table *t);
 
 #endif
 #endif
