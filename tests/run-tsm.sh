@@ -32,11 +32,14 @@ build_lib() {
 	for f in "$top"/tsm/*.c; do
 		gcc $CFLAGS -DHAVOC_SIXEL=$1 -c -o "$tmp/o$1/$(basename "$f" .c).o" "$f" 2>"$tmp/cc.log" ||
 			{ cat "$tmp/cc.log" >&2; fail "compile $f"; ok_build=0; }
-		# upstream warnings stay, new ones must not appear in the log
-		grep -v "^tsm/\(wcwidth\|tsm-vte\)\.c" "$tmp/cc.log" |
-			grep "warning:" >"$tmp/newwarn.log"
+		# the six upstream warnings stay; any other one fails
+		grep "warning:" "$tmp/cc.log" |
+			grep -v "/tsm/wcwidth\.c:.*\[-Wparentheses\]" |
+			grep -v "/tsm/tsm-vte\.c:.*\[-W\(sign-compare\|maybe-uninitialized\|format-overflow=\)\]" \
+			>"$tmp/newwarn.log"
 		if [ -s "$tmp/newwarn.log" ]; then
 			cat "$tmp/newwarn.log" >&2
+			fail "new warnings in $f HAVOC_SIXEL=$1"
 		fi
 	done
 }
