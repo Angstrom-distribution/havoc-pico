@@ -30,6 +30,7 @@
 #include "emoji.h"
 #include "pixfont.h"
 #include "c8.h"
+#include "graphics.h"
 #ifdef HAVE_PICOWL_PALETTE
 #include "picowl-palette-v1.h"
 #else
@@ -69,8 +70,23 @@ struct cell_key {
 	/* drawn from an emoji pack: whether it is depends on the pack and the
 	 * cell size, not only on the character */
 	uint8_t picture;
+#if HAVOC_SIXEL
+	/* only on a cell with a sixel tile: KF_*, and which picture it is
+	 * (a slot is reused for another one) */
+	uint8_t kflags;
+	uint8_t pad;
+	uint32_t pic, pgen;
+#else
 	uint8_t pad[2];
+#endif
 };
+
+#if HAVOC_SIXEL
+#define KF_INV 0x01	/* the tile is drawn inverted (cursor, selection) */
+_Static_assert(sizeof(struct cell_key) == 24, "cell_key has padding");
+#elif !HAVE_GRAPHICS
+_Static_assert(sizeof(struct cell_key) == 16, "cell_key has padding");
+#endif
 
 enum {
 	CELL_PAINT = 1,
@@ -152,6 +168,11 @@ static struct {
 
 	struct tsm_screen *screen;
 	struct tsm_vte *vte;
+#if HAVE_GRAPHICS
+	struct gfx *gfx;
+	/* the pixel size last given to the pty */
+	unsigned int ws_xpixel, ws_ypixel;
+#endif
 	unsigned int mods;
 
 	struct xkb_context *xkb_ctx;
@@ -259,6 +280,9 @@ static struct {
 		int font_size;
 		char font_path[512];
 		char font_pixel[16];
+#if HAVE_GRAPHICS
+		struct gfx_config gfx;
+#endif
 	} cfg;
 } term = {
 	.scale = 120,
@@ -275,6 +299,9 @@ static struct {
 	.cfg.font_size = 18,
 	.cfg.font_path = "",
 	.cfg.font_pixel = "",
+#if HAVE_GRAPHICS
+	.cfg.gfx.memory = 524288,
+#endif
 	.opt.app_id = "havoc"
 };
 
@@ -304,10 +331,18 @@ static void handle_tty(int ev)
 	int len = 0;
 
 	if (ev & POLLIN) {
+#if HAVE_GRAPHICS
+		/* a picture is many bytes: fewer reads and redraws while one
+		 * arrives; with pictures off the reads stay as they were */
+		char data[4096];
+		size_t size = gfx_enabled(term.gfx) ? sizeof(data) : 256;
+#else
 		char data[256];
+		size_t size = sizeof(data);
+#endif
 
 		term.need_redraw = true;
-		len = read(term.master_fd, data, sizeof(data));
+		len = read(term.master_fd, data, size);
 
 		if (len < 0) {
 			error("could not read from pty");
@@ -837,6 +872,16 @@ static void collect_cell(struct tsm_screen *tsm, uint32_t id,
 
 	memset(k, 0, sizeof(*k));
 	k->width = char_width;
+#if HAVOC_SIXEL
+	if (a->pic) {
+		/* a tile is composed with the plain colours and inverted as a
+		 * whole, so that the picture inverts too */
+		k->pic = a->pic;
+		k->pgen = gfx_pic_gen(term.gfx, a->pic);
+		k->kflags = a->inverse ? KF_INV : 0;
+		inv = 0;
+	}
+#endif
 	k->bg = join(0, a->br ^ inv, a->bg ^ inv, a->bb ^ inv);
 	/* a blank cell has no foreground, so the colour must not tell two
 	 * of them apart; the second half of a wide cell is blank for the
@@ -949,6 +994,38 @@ static void paint_cell8(struct buffer *buffer, int x, int y, int w, int vis)
 	}
 }
 
+#if HAVOC_SIXEL
+/* A tile of a sixel picture over the cell's background; unset pixels of the
+ * picture show the background. Inverse inverts what is composed: with the
+ * alpha a (premultiplied colours), c becomes a - c. */
+static void paint_tile(struct buffer *buffer, int x, int y)
+{
+	const struct cell_key *k = &term.cur[y * term.col + x];
+	uint32_t *dst = buffer->data;
+	struct gfx_target t;
+	int px, py;
+
+	dst += term.margin.top * term.width + term.margin.left;
+	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
+	blank(dst, 1, k->bg >> 16, k->bg >> 8, k->bg, term.cfg.opacity);
+	t.px = dst;
+	t.stride = term.width;
+	t.w = term.cwidth;
+	t.h = term.cheight;
+	gfx_paint(term.gfx, GFX_TILE, k->pic, &t);
+
+	if (!(k->kflags & KF_INV))
+		return;
+	for (py = 0; py < term.cheight; ++py) {
+		uint32_t *r = dst + py * term.width;
+
+		for (px = 0; px < term.cwidth; ++px)
+			r[px] = (r[px] & 0xff000000) |
+				((r[px] >> 24) * 0x010101 - (r[px] & 0xffffff));
+	}
+}
+#endif
+
 static void paint_cell(struct buffer *buffer, int x, int y)
 {
 	int i = y * term.col + x;
@@ -972,6 +1049,13 @@ static void paint_cell(struct buffer *buffer, int x, int y)
 		paint_cell8(buffer, x, y, w, vis);
 		return;
 	}
+
+#if HAVOC_SIXEL
+	if (k->pic) {
+		paint_tile(buffer, x, y);
+		return;
+	}
+#endif
 
 	dst += term.margin.top * term.width + term.margin.left;
 	dst = &dst[y * term.cheight * term.width + x * term.cwidth];
@@ -2143,6 +2227,7 @@ static void do_configure(void)
 	int col, row;
 	int padding = (term.cfg.padding * term.scale + 60) / 120;
 	int logicalwidth, logicalheight;
+	bool pty_size = false;
 
 	if (term.confwidth)
 		scaledwidth = (term.confwidth * term.scale + 60) / 120;
@@ -2214,10 +2299,6 @@ static void do_configure(void)
 	}
 
 	if (term.col != col || term.row != row) {
-		struct winsize ws = {
-			row, col, 0, 0
-		};
-
 		term.col = col;
 		term.row = row;
 		tsm_screen_resize(term.screen, col, row);
@@ -2233,12 +2314,40 @@ static void do_configure(void)
 		if (!term.cur || !term.shown || !term.cur_ch || !term.flags)
 			abort();
 		term.shown_valid = false;
-
-		if (term.master_fd >= 0) {
-			if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
-				error("could not resize pty");
-		}
+		pty_size = true;
 		term.need_redraw = true;
+	}
+
+#if HAVE_GRAPHICS
+	if (gfx_enabled(term.gfx)) {
+		unsigned long xp = (unsigned long)col * term.cwidth;
+		unsigned long yp = (unsigned long)row * term.cheight;
+
+		gfx_set_geometry(term.gfx, term.cwidth, term.cheight, col, row);
+		/* the pixel fields change with the cell size alone too */
+		if (xp > 65535)
+			xp = 65535;
+		if (yp > 65535)
+			yp = 65535;
+		if (xp != term.ws_xpixel || yp != term.ws_ypixel) {
+			term.ws_xpixel = xp;
+			term.ws_ypixel = yp;
+			pty_size = true;
+		}
+	}
+#endif
+
+	if (pty_size && term.master_fd >= 0) {
+		struct winsize ws = {
+			row, col, 0, 0
+		};
+
+#if HAVE_GRAPHICS
+		ws.ws_xpixel = term.ws_xpixel;
+		ws.ws_ypixel = term.ws_ypixel;
+#endif
+		if (ioctl(term.master_fd, TIOCSWINSZ, &ws) < 0)
+			error("could not resize pty");
 	}
 }
 
@@ -2600,6 +2709,22 @@ static void font_config(char *key, char *val)
 			sizeof(term.cfg.font_pixel) - 1);
 }
 
+static void graphics_config(char *key, char *val)
+{
+	if (strcmp(key, "sixel") == 0) {
+#if HAVOC_SIXEL
+		term.cfg.gfx.sixel = strcmp(val, "yes") == 0;
+#else
+		if (strcmp(val, "yes") == 0)
+			fprintf(stderr, "[graphics] sixel is not built in\n");
+#endif
+	} else if (strcmp(key, "memory") == 0) {
+#if HAVE_GRAPHICS
+		term.cfg.gfx.memory = cfg_num(val, 10, 0, 16777216);
+#endif
+	}
+}
+
 static void bind_config(char *key, char *val)
 {
 	unsigned int mods = 0;
@@ -2745,6 +2870,8 @@ static void read_config(void)
 				section = &terminal_config;
 			else if (strcmp(key, "font") == 0)
 				section = &font_config;
+			else if (strcmp(key, "graphics") == 0)
+				section = &graphics_config;
 			else if (strcmp(key, "bind") == 0)
 				section = &bind_config;
 			else if (strcmp(key, "colors") == 0)
@@ -2887,6 +3014,11 @@ retry:
 
 	if (tsm_vte_new(&term.vte, term.screen, wcb, NULL) < 0)
 		fail(evte, "failed to create tsm vte");
+#if HAVE_GRAPHICS
+	term.gfx = gfx_new(term.screen, term.vte, &term.cfg.gfx);
+	gfx_set_geometry(term.gfx, term.cwidth, term.cheight, term.cfg.col,
+			 term.cfg.row);
+#endif
 
 	term.surf = wl_compositor_create_surface(term.cp);
 	if (term.surf == NULL)
@@ -3024,6 +3156,9 @@ etoplvl:
 exdgsurf:
 	wl_surface_destroy(term.surf);
 esurf:
+#if HAVE_GRAPHICS
+	gfx_free(term.gfx);
+#endif
 	tsm_vte_unref(term.vte);
 evte:
 	tsm_screen_unref(term.screen);
