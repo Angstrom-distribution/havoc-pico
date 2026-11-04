@@ -1,0 +1,335 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="366" height="595.9543" viewBox="-0.3125 -0.4375 800.625 1303.65">
+<!--
+  HP iPAQ h2200, front view. Glass: <rect id="screen"> x=137.5 y=168 width=525 height=700 (3:4).
+
+  SPDX-FileCopyrightText: 2026 Koen Kooi
+  SPDX-License-Identifier: CC-BY-SA-4.0
+
+  Provenance: an original vector drawing, written as SVG geometry and
+  gradients and drawn with the assistance of Claude (Opus 5.5) from
+  photographs of the author's own iPAQ h2200. No third-party artwork was
+  traced or embedded. "HP", "iPAQ" and "Pocket PC" are trademarks of their
+  owners and appear only to identify the device.
+-->
+<defs>
+  <linearGradient id="ip-face-h" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#7b7467"/>
+    <stop offset="0.022" stop-color="#a49c8c"/>
+    <stop offset="0.058" stop-color="#bdb5a5"/>
+    <stop offset="0.066" stop-color="#ede7da"/>
+    <stop offset="0.076" stop-color="#d3cbbb"/>
+    <stop offset="0.3" stop-color="#d8d1c2"/>
+    <stop offset="0.62" stop-color="#cdc5b5"/>
+    <stop offset="0.924" stop-color="#bfb7a7"/>
+    <stop offset="0.933" stop-color="#e0d9cb"/>
+    <stop offset="0.942" stop-color="#aaa292"/>
+    <stop offset="0.975" stop-color="#8f8879"/>
+    <stop offset="1" stop-color="#6a6459"/>
+  </linearGradient>
+  <linearGradient id="ip-face-v" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.4"/>
+    <stop offset="0.09" stop-color="#fff" stop-opacity="0.12"/>
+    <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="0.78" stop-color="#000" stop-opacity="0.05"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.22"/>
+  </linearGradient>
+  <linearGradient id="ip-sheen" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="0.35" stop-color="#fff" stop-opacity="0.12"/>
+    <stop offset="0.45" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+  <pattern id="ip-brush" width="6" height="3" patternUnits="userSpaceOnUse">
+    <rect width="6" height="1" fill="#fff" fill-opacity="0.045"/>
+    <rect y="2" width="6" height="0.6" fill="#000" fill-opacity="0.018"/>
+  </pattern>
+  <!-- rubber side grips: x1 = outer rounded edge, x2 = seam against the faceplate -->
+  <linearGradient id="ip-rail" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#1a1a1c"/>
+    <stop offset="0.07" stop-color="#3b3b3f"/>
+    <stop offset="0.16" stop-color="#4a4a4f"/>
+    <stop offset="0.32" stop-color="#2a2a2d"/>
+    <stop offset="0.6" stop-color="#1b1b1d"/>
+    <stop offset="0.84" stop-color="#202023"/>
+    <stop offset="0.92" stop-color="#38383c"/>
+    <stop offset="0.96" stop-color="#2a2a2d"/>
+    <stop offset="1" stop-color="#0c0c0d"/>
+  </linearGradient>
+  <linearGradient id="ip-rail-r" href="#ip-rail" x1="1" y1="0" x2="0" y2="0"/>
+  <linearGradient id="ip-rail-v" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.16"/>
+    <stop offset="0.05" stop-color="#fff" stop-opacity="0.04"/>
+    <stop offset="0.3" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="0.9" stop-color="#000" stop-opacity="0.08"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.35"/>
+  </linearGradient>
+  <pattern id="ip-rail-tex" width="3" height="3" patternUnits="userSpaceOnUse">
+    <circle cx="0.8" cy="0.8" r="0.55" fill="#fff" fill-opacity="0.05"/>
+    <circle cx="2.3" cy="2.2" r="0.6" fill="#000" fill-opacity="0.18"/>
+  </pattern>
+  <path id="ip-grip-l" d="M66,63 C50,67 41,90 41,120 V985 C46,700 60,300 66,63 Z"/>
+  <path id="ip-grip-r" d="M734,63 C750,67 759,90 759,120 V985 C754,700 740,300 734,63 Z"/>
+  <linearGradient id="ip-bev-top" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#faf8f3"/><stop offset="1" stop-color="#d8d3c9"/>
+  </linearGradient>
+  <linearGradient id="ip-bev-bot" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#a39e93"/><stop offset="1" stop-color="#e9e5dd"/>
+  </linearGradient>
+  <linearGradient id="ip-bev-l" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#e8e4dc"/><stop offset="1" stop-color="#c3beb3"/>
+  </linearGradient>
+  <linearGradient id="ip-bev-r" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#aaa59a"/><stop offset="1" stop-color="#cfcac0"/>
+  </linearGradient>
+  <linearGradient id="ip-bezel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1b1b1d"/><stop offset="1" stop-color="#0a0a0b"/>
+  </linearGradient>
+  <linearGradient id="ip-glass" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.06"/>
+    <stop offset="0.45" stop-color="#fff" stop-opacity="0.012"/>
+    <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="ip-led-a" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#3b1a05"/><stop offset="0.5" stop-color="#d9741c"/><stop offset="1" stop-color="#4a2006"/>
+  </linearGradient>
+  <linearGradient id="ip-led-b" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8a6a35"/><stop offset="0.5" stop-color="#fff3c8"/><stop offset="1" stop-color="#9a7a40"/>
+  </linearGradient>
+  <radialGradient id="ip-dish" cx="0.5" cy="0.5" r="0.5" fx="0.6" fy="0.72">
+    <stop offset="0.6" stop-color="#8f8a80"/><stop offset="0.85" stop-color="#d7d2c8"/><stop offset="1" stop-color="#f6f3ec"/>
+  </radialGradient>
+  <linearGradient id="ip-dish-rim" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#8d887d"/><stop offset="1" stop-color="#fbf9f4"/>
+  </linearGradient>
+  <radialGradient id="ip-chrome" cx="0.5" cy="0.5" r="0.5" fx="0.38" fy="0.3">
+    <stop offset="0" stop-color="#ffffff"/>
+    <stop offset="0.22" stop-color="#d9dadb"/>
+    <stop offset="0.5" stop-color="#6d6e70"/>
+    <stop offset="0.72" stop-color="#2c2d2f"/>
+    <stop offset="0.86" stop-color="#9a9b9d"/>
+    <stop offset="1" stop-color="#404143"/>
+  </radialGradient>
+  <linearGradient id="ip-chrome-ring" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0" stop-color="#f4f4f4"/><stop offset="0.3" stop-color="#707174"/>
+    <stop offset="0.55" stop-color="#1e1f21"/><stop offset="0.8" stop-color="#c9cacc"/><stop offset="1" stop-color="#fff"/>
+  </linearGradient>
+  <linearGradient id="ip-housing" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#5b5c5f"/>
+    <stop offset="0.08" stop-color="#e9eaeb"/>
+    <stop offset="0.16" stop-color="#8c8d90"/>
+    <stop offset="0.3" stop-color="#3a3b3e"/>
+    <stop offset="0.55" stop-color="#2a2b2d"/>
+    <stop offset="0.78" stop-color="#6f7073"/>
+    <stop offset="0.86" stop-color="#ffffff"/>
+    <stop offset="0.92" stop-color="#a5a6a8"/>
+    <stop offset="1" stop-color="#4a4b4e"/>
+  </linearGradient>
+  <linearGradient id="ip-housing-v" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="0.22" stop-color="#000" stop-opacity="0.1"/>
+    <stop offset="0.5" stop-color="#fff" stop-opacity="0.18"/>
+    <stop offset="0.8" stop-color="#fff" stop-opacity="0.05"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.35"/>
+  </linearGradient>
+  <linearGradient id="ip-joy" x1="0.2" y1="0" x2="0.5" y2="1">
+    <stop offset="0" stop-color="#2b2c2e"/>
+    <stop offset="0.3" stop-color="#55565a"/>
+    <stop offset="0.48" stop-color="#c9cacc"/>
+    <stop offset="0.56" stop-color="#f4f4f4"/>
+    <stop offset="0.68" stop-color="#7c7d80"/>
+    <stop offset="0.85" stop-color="#3a3b3e"/>
+    <stop offset="1" stop-color="#b6b7b9"/>
+  </linearGradient>
+  <radialGradient id="ip-joy-rim" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0.7" stop-color="#000" stop-opacity="0"/>
+    <stop offset="0.92" stop-color="#000" stop-opacity="0.35"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.6"/>
+  </radialGradient>
+  <radialGradient id="ip-dimple" cx="0.5" cy="0.5" r="0.5" fx="0.55" fy="0.62">
+    <stop offset="0" stop-color="#111"/><stop offset="0.7" stop-color="#2d2e30"/><stop offset="1" stop-color="#8e8f92" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="ip-shadow" x="-10%" y="-10%" width="120%" height="125%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="12"/>
+    <feOffset dy="10" result="b"/>
+    <feFlood flood-color="#000" flood-opacity="0.35"/>
+    <feComposite in2="b" operator="in"/>
+  </filter>
+  <filter id="ip-soft" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur stdDeviation="1.6"/>
+  </filter>
+  <clipPath id="ip-face-clip">
+    <path d="M41,120 C41,84 62,66 102,59 Q400,24 698,59 C738,66 759,84 759,120 V1040 C759,1075 740,1095 690,1104 C550,1139 250,1139 110,1104 C60,1095 41,1075 41,1040 Z"/>
+  </clipPath>
+  <clipPath id="ip-frame-clip"><rect x="104" y="135" width="592" height="752" rx="16"/></clipPath>
+  <g id="ip-dish-btn">
+    <circle r="35" fill="url(#ip-dish-rim)"/>
+    <circle r="32.5" fill="url(#ip-dish)"/>
+    <circle r="25.5" fill="#1d1d1f"/>
+    <circle r="24" fill="url(#ip-chrome)"/>
+    <ellipse cx="-7" cy="-11" rx="11" ry="5" fill="#fff" fill-opacity="0.45" filter="url(#ip-soft)"/>
+  </g>
+</defs>
+
+<path id="shadow" d="M41,120 C41,84 62,66 102,59 Q400,24 698,59 C738,66 759,84 759,120 V1040 C759,1075 740,1095 690,1104 C550,1139 250,1139 110,1104 C60,1095 41,1075 41,1040 Z" fill="#000" filter="url(#ip-shadow)"/>
+<g id="device">
+  <g id="face">
+    <path id="face-base" d="M41,120 C41,84 62,66 102,59 Q400,24 698,59 C738,66 759,84 759,120 V1040 C759,1075 740,1095 690,1104 C550,1139 250,1139 110,1104 C60,1095 41,1075 41,1040 Z" fill="url(#ip-face-h)" stroke="#6f6a60" stroke-width="1.5"/>
+    <g clip-path="url(#ip-face-clip)">
+      <rect x="41" y="30" width="718" height="1096" fill="url(#ip-face-v)"/>
+      <rect x="41" y="30" width="718" height="1096" fill="url(#ip-brush)"/>
+      <rect x="41" y="30" width="718" height="1096" fill="url(#ip-sheen)"/>
+      <!-- top edge highlight and lower chamfer -->
+      <path d="M100,62 Q400,28 700,62" fill="none" stroke="#fff" stroke-opacity="0.75" stroke-width="2"/>
+      <path d="M47,1040 C47,1068 64,1086 112,1097 C250,1130 550,1130 688,1097 C736,1086 753,1068 753,1040" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="5"/>
+    </g>
+  </g>
+
+  <!-- black rubber side grips, slightly proud of the faceplate -->
+  <g id="rails">
+    <g id="rail-groove" clip-path="url(#ip-face-clip)" fill="none">
+      <path d="M66,67 C65,300 52,700 41,985 M734,67 C735,300 748,700 759,985" stroke="#000" stroke-opacity="0.45" stroke-width="5" filter="url(#ip-soft)"/>
+      <path d="M71,74 C70,300 57,700 46,960 M729,74 C730,300 743,700 754,960" stroke="#fff" stroke-opacity="0.35" stroke-width="1.5"/>
+    </g>
+    <g id="grip-left">
+      <use href="#ip-grip-l" fill="url(#ip-rail)"/>
+      <use href="#ip-grip-l" fill="url(#ip-rail-v)"/>
+      <use href="#ip-grip-l" fill="url(#ip-rail-tex)"/>
+      <path d="M54,72 C47,80 44,100 44,120 V700" fill="none" stroke="#fff" stroke-opacity="0.1" stroke-width="3" filter="url(#ip-soft)"/>
+      <path d="M66.6,66 C65.6,300 52.6,700 41.6,975" fill="none" stroke="#5a5a5f" stroke-opacity="0.55" stroke-width="1"/>
+      <path d="M66,63 C50,67 41,90 41,120" fill="none" stroke="#6a6a6f" stroke-opacity="0.5" stroke-width="1.2"/>
+    </g>
+    <g id="grip-right">
+      <use href="#ip-grip-r" fill="url(#ip-rail-r)"/>
+      <use href="#ip-grip-r" fill="url(#ip-rail-v)"/>
+      <use href="#ip-grip-r" fill="url(#ip-rail-tex)"/>
+      <path d="M746,72 C753,80 756,100 756,120 V700" fill="none" stroke="#fff" stroke-opacity="0.08" stroke-width="3" filter="url(#ip-soft)"/>
+      <path d="M733.4,66 C734.4,300 747.4,700 758.4,975" fill="none" stroke="#5a5a5f" stroke-opacity="0.45" stroke-width="1"/>
+      <path d="M734,63 C750,67 759,90 759,120" fill="none" stroke="#6a6a6f" stroke-opacity="0.4" stroke-width="1.2"/>
+    </g>
+  </g>
+
+  <!-- status LEDs, top left -->
+  <g id="leds">
+    <rect x="174" y="62" width="14" height="56" rx="7" fill="#7d786d"/>
+    <rect x="176" y="64" width="10" height="52" rx="5" fill="url(#ip-led-a)"/>
+    <rect x="203" y="62" width="14" height="56" rx="7" fill="#7d786d"/>
+    <rect x="205" y="64" width="10" height="52" rx="5" fill="url(#ip-led-b)"/>
+    <rect x="178" y="70" width="2.5" height="36" rx="1.2" fill="#fff" fill-opacity="0.35"/>
+    <rect x="207" y="70" width="2.5" height="36" rx="1.2" fill="#fff" fill-opacity="0.7"/>
+  </g>
+
+  <!-- power button, top right -->
+  <g id="power" transform="translate(606,98)">
+    <circle r="31" fill="url(#ip-dish-rim)"/>
+    <circle r="28.5" fill="url(#ip-dish)"/>
+    <circle r="21.5" fill="#1d1d1f"/>
+    <circle r="20" fill="url(#ip-chrome)"/>
+    <ellipse cx="-6" cy="-9" rx="9" ry="4" fill="#fff" fill-opacity="0.45" filter="url(#ip-soft)"/>
+    <path d="M-5.2,-6.5 A9,9 0 1 0 5.2,-6.5" fill="none" stroke="#111" stroke-width="2.8" stroke-linecap="round" transform="translate(0,2)"/>
+    <line x1="0" y1="-9.5" x2="0" y2="0.5" stroke="#111" stroke-width="2.8" stroke-linecap="round"/>
+  </g>
+
+  <!-- raised frame around the display: mitred bevel, bezel, glass -->
+  <g id="frame">
+    <g clip-path="url(#ip-frame-clip)">
+      <polygon points="104,135 696,135 670,159 130,159" fill="url(#ip-bev-top)"/>
+      <polygon points="104,887 696,887 670,875 130,875" fill="url(#ip-bev-bot)"/>
+      <polygon points="104,135 130,159 130,875 104,887" fill="url(#ip-bev-l)"/>
+      <polygon points="696,135 670,159 670,875 696,887" fill="url(#ip-bev-r)"/>
+    </g>
+    <rect x="104" y="135" width="592" height="752" rx="16" fill="none" stroke="#8a8579" stroke-opacity="0.6" stroke-width="1"/>
+    <rect id="bezel" x="130" y="159" width="540" height="716" rx="7" fill="url(#ip-bezel)"/>
+    <rect x="130.5" y="159.5" width="539" height="715" rx="7" fill="none" stroke="#000" stroke-width="1"/>
+    <rect x="135.5" y="166" width="529" height="704" rx="3" fill="#050506" stroke="#2c2c2e" stroke-width="1"/>
+    <rect id="screen" x="137.5" y="168" width="525" height="700" fill="#000"/>
+    <style>.fr1,.fr2,.nt0,.nt1,.nt2{animation-duration:7000ms;animation-iteration-count:infinite;animation-fill-mode:forwards}.fr1,.fr2{animation-timing-function:step-end}@keyframes fr1{0%{opacity:0}25.7143%{opacity:1}100%{opacity:1}}.fr1{opacity:0;animation-name:fr1}@keyframes fr2{0%{opacity:0}74.2857%{opacity:1}100%{opacity:1}}.fr2{opacity:0;animation-name:fr2}@keyframes nt0{0%{opacity:1}25.7143%{opacity:0}100%{opacity:0}}.nt0{animation-name:nt0;animation-timing-function:step-end}@keyframes nt1{0%{opacity:0}25.7143%{opacity:1}74.2857%{opacity:0}100%{opacity:0}}.nt1{animation-name:nt1;animation-timing-function:step-end}@keyframes nt2{0%{opacity:0}74.2857%{opacity:1}100%{opacity:1}}.nt2{animation-name:nt2;animation-timing-function:step-end}</style>
+<defs>
+<image id="fs-i0" width="240" height="320" style="image-rendering:crisp-edges;image-rendering:pixelated" href="data:image/png;base64,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"/>
+<image id="fs-i1" width="240" height="320" style="image-rendering:crisp-edges;image-rendering:pixelated" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAFACAIAAAANimYEAAAbmElEQVR4nO3db2gbZ54H8GezPhiDOcaQgxE4kCkJRKY5MiYulWlfRMUHVnAhEt4jNi10td0llRu4Oi2kcvMiqD7IyVkIdgqp5UKLXEiQCw1WYIMnL7zIC16kBS92IcUKuDCCNSfBhsu8yIt78Tjj0b/RaOaRPBp/P+SFYml+M5p5NPNoNM98CQEAAGf6FSEk8nEkeClI///Of7xDXtZ+6fh74wPSwLVPrrVnyTiO877u9Xq95CWRn8iFQsH8s8Ac861vstVZIZ4UfW/6pj6dUhSF47h6L4vdjK3Kq+xm20D8VlzZVbK5bHYjqyjKyo8rXA9n8lkXm7s7F70ebf98mW99k63OuuClYKtKW+J93csf5/cfn/Hu5HfCH4ZNPutiqeVU/Hb8sJeCGeatrsvMiwKjAbFPJIQoe8ryg+WKApEPI+lHaVEU/Rf82c3s8g/LFYcPjuOCY8F+b382l00/TKuqamam23/fPnj80/b62vr42Hji64SZZyvfX/OHM0EQ/MP+AWmgWCyu/3ldfiIfvJ0ebuLyhPe0V/mHkn6Y3v7pYEnEU6LP5ysUCv4L/uRSku/hLwYuJhYT+Wf5g8ktrQ1CSORKhBDi8Xg4jqOPlYKy/MPB5jCu7HvTJ4ri0oOlwEjA/7Zf+YeS/C5ZKBQaLrPlrc9xnH/YL52Tent78/m8/FjWryub6m2FY2Ym9gge8bQYHAvS9VhWl+Omb0zHbsbit+OCIMRvxVfTZQcmrodb+XEldjPG83zkw0h2I+sf9je79DzP+3y+3N9yzT5Leyb+C83NUTwp5nK50GioWCx6PB79HpHjOPmRHLsR43l+Ynxi5dGKvrh0VpqdmY18GPG96Ut9n4rNxMSTYmYtw/P7BxM7a0M8LYqnRb6H7+3tpY89fZ6DBWtU2X/BP3l1Mj4Tn7sz5xE8geFA6FLIzDJb3vqB0UB8Ju7xeNTnanA0uPJoJTASMPlmjRlvhX0Nd/41e1FcD6coyuqfVumE/mG/oihaZ4AQEhwL7jzd0f4SuxlLLiXNL/rcnbnU/dROfid+O66tYpPPEkLit+OK0nSDjs3EVtIr2n/168R/wa/sKuIpkf49dT+1cG9Be5auQ57npfOSoiiBkQDHcYqiaG3L5tog9bscDStHr0eVXWXu7py2ouiDhsusFWx26/PHef2qSy4lqytY63IYbAVTe+iG5CcyPcBl1jOEkCHfkPZUaDS09GCptFei/039mPL5fOa/wKmqSitzHFfdPzJ+lhAyf3c+OBbM5rJNvZ0X/3whiqLvTR+tqT92+y/4t55u5X/O07+nH6eH3h7Sz/qF+qJUKtH3qyiKqqrFUpHv2d/GNteGAVOVu0hiMVEq7b9Ge2C8zA3V2/qlvZKqqhzH+d7yBUYDxb2ieEK0+TYpg61gqg/dUO7v+4d79blKXhL9EZbuHccvj3d3de+/uosM+Ybkx3KtSpWufXaN1pEfy4m7idBvQuafJYTkf87Tt92UxDeJfm//8g/LxVJRfizP3pnVivgv+DMbGe2V2Vy2l++VXpe0Do/6XCWEvHj5grxqMepzle6B7K+NekxWLpaKNTtmBstsRr2tLwjC/J15aVDK5/OlvZLH4+nu6a5fpgkGW4FNg67rJSFdJH4rnvy+7PCn7RtMUp+ryW+T059P8zxfPa3xsxYUCoWJ9yfEk6J/2B9+P7z6eLX/bD/d6vndvOf4Qc/V828eQohSUA4W5mX9L3mM1oblyqVSqeb3Y6NltiH8Qdjj8QxIA3Qxotejk1cnmVQ22AoHXY7t7W1CiP57hn2qquaf5YfeHiqUM//VXuP1epU9pfS89rav96z3jNc/7Nf36c3LP8snvk5MfDDRzXUPDe4fRuUnsiRJ2muk89LW9pbJn3WYrI3iXlG/LRlWZi4UDKV+TGkfqppff621OoOtoGvQP20rvyjRz6LSOcl7xnswdRfheZ7neY7juv+lW3tsct7xW/GhwaHo9ah4SuQ4TjonxW+ZOo06d2cuMBIQT4re172RjyOB0UDy26S2gzF+VhP+fTj5bXLg7IDJpaUiVyLSeYnjOJ7nx8fGi3tF2jskhMhP5N7jvbGZmCAIwbHgxG8m9Gf0GrK8NjTpx2mfzxcYCQiCoP+g2q9cm42tL6/JdBsJghD9IiqKNTrQdVudceX6W6GsyxG+Eo58FEk/TJMu4jnhoe0jMBxILB6c36UfqcQ3ienPp83Me/mHZXpyZ/LqJC0or5lqAb3HexP3EnQBt7a3EvcSiW8SJp+1STwtau8uu5mdvjGt7eryP+djN2NTn02FPwgTQuQn8vxX8+YrW14bGvmxnDiTmPp0qt/bn93IXnz3IqvKNdnZ+vN35+Mz8cxahhCS2cjM3pqdvlFjqpqtzpjNrcCG0CfQnYf5STiOE0+KQp9g4VmbOI4TT4l1+ypdRDwl1jxRaJKFtXHola0RBMHOijJieysAAAAAAAAAADjWr82/dO7unPTv0tqf15gvROsqw1HTxLUcHsHTop9SW1cZjppfE0JIFwmHw6X/LWk/u4c/DKv/p+7t7dH/Rq5E3hh8Y+itoZ6ent5/7X1j8I0TJ07QMQJcD/eH8B92C7vvXnz3P3/zn4qiaFPZrAxgwTFCCMdxsZsx79mDX9JjN2LS4MHFHwZjJXien74xnVxMTn8+LQiC/FjWX/BupzKABaa6HHTwurgs5p/l6w1kH/ANqM9V6byUfpj2nvGa3MuaqQxgHqMRK2syvVw499dcsVQcenuo4SQArcCmQevHQeRyOf/bTQ+DBWCiRoPmemqPzzOgv+RcOC4oe0rNl1moDNCUY4QQ9bmq/KJ4T+1/ddMPcdWrOVaC0oYPcBzX7+3Xrra2XxmgKft76Mx6JjAa8L7ulc5JkQ8rb79A1RsrQQjxD/vH3xund2YghNBruplUBrBCOiet/LiiKMrO053ASEDZVcbfG694Dc/z0S+iq/IqvZcc/aPQJyiKMvXp1Nb2lqIoqfsp35s+JpUB7BL6hGb7uLRB+97ykS5iMHjEQmUAC8paWeEXGzelfWk0ua3KAKaxOW0H4BZdRDonHZF7MwMAAIBVnZqxUsH3lk9V1dxfa99AGuxDxopd5lNUwh+EFUVp57IdImSsmNVZGSsaQRC2NrdW/7R6RBo0MlaMdWrGiiY2E0ssJrxeL72fe+33h4wVZKzoOTZjJTAS6Pf2G9yoDxkrGmSsVHJaxgrXw2Vz+5tt4d5CzS4HMlY0yFhpwqFkrMRuxLY3t43DHJCxUvYiZKyY1P6MFem8FBwLvnPhHePJkbGCjBWmWpaxMjQ41N3VvfJov2PAcVx3V/fW9ta1T66lH6VtLjUyVpg4lIyVgwatpV1Y2KXVo2V/zP5x1mapihSV9KO0/tRB5ErE4/FM35iu6F14z3g9JzzZXFY7FptHM1bkJ3JmLTM0OERPdMhP5KmrU9prrGWs2Fkbxhkr9tczQ6FgKHk/aTJjpalWZ7AVOjVjJf8sn36U1v4pBaX4z2L6UbqibSFjxS5krFRoUcZKSyFjRYOMlbqYZ6y0FDJWWEHGCgAAAAAAAACABchYAVdBxgq4CjJWwFWQsQKugowVcBVkrICrIGMFXAUZK+AqyFgBV0HGCrgRMlbAhZCxAp0OGSvgKshYAdBDxgoAAAA01qkZK/xxvuJGO9s/bVu43xeYhIwVu4wzVuh9hfW0teNuyFgxq7MyVpy2tG2DjBVjHZ+x0gAyVl5BxsoBJ2esBMeCBicNkbGiQcZKJUdlrAQvBZVdJbuR3cnv7OR35u7O1byqCRkrGmSsNKH9GSuZ9YxX8g4MDvSf7b/22bXQaGhibKJ6cmSslL0IGSsmtT9jRTuLpz5Xlx8sh0ZDwbFg9U2CkbGCjBWmWpaxUiGzkZm+MM31cHTb2ISMFSYOJWNFF0nxKu2CySwpLfujUM7CbWUqMlYqBEYC2kDdsqnOeP3DfmuDBmjGysQHE91c99Dg/mFUfiJrw3OI1YwVO2vDOGPF/npmKBQMpX5MmcxYaaqywVbo1IyV6BdR/7Bf6BOk81JsJjYgDVTsnChkrNiFjJUKLcpY6T/dP/nRJCGEvCSZ9czUJ1P209w0yFjRIGOlLuYZKzzPe894WzQGERkrrCBjBQAAAAAAAADAAmSsgKsgYwVcBRkr4CrIWAFXQcYKuAoyVsBVkLECroKMFXAVZKyAqyBjBdwIGSvgQshYgU6HjBVwFWSsAOghYwUAAAAa69SMFYo/zg8NDnn6PPln+cxaBhdVtw4yVuwyzlghhARGAjtPdxRFyaxndvI7kY9r/2rjMshYMctpqSXGGStCn6DsKqn7Kem8RF7dY+lwFrS9kLFirFMzVuhNzSben6DV6O03674/ZKwgY0XPgRkrQ76h7GaW47jAaEA6J9WbEBkrGmSsVHJUxko2l11YXNja3KIxK6t/Wq24hoRCxooGGStNaH/GCs/zF0cuxmZiA4MDA4MDpeel/bvrlkPGStmLkLFiUvszVkqlktqlLn2/RAgp7ZXSD9PRG9HqSApkrCBjhamWZawU/1HUx1NsPd3q5rq9p7w1N1izkLHCBDJWjFRkrKz/ZV2SJG0vMiANFEtFbVdxMBUyVg4PMlbKGGesJO8nu7u6YzdjQp/gH/ZPjE+kH6Wrdz/IWLGr0zJWykjnpYXFBWVXURRF610HRgJKldhMjD5Lv+cGRg9Ox1SPSRm/PE7Hsyi7irKrmPxen1xK0iVRFGVVXo1ej1aEDwRGA7Ts1uYWbdnVRayd5YjfjtNFVXaVlfSK9gstFbkS2cnv0AVLLiXLTulc2v8CSsc90N96shvZ8csHK8Ta2tAYjO4xrhy9HtU+lnrGy2xn64unxNT9FF2Y1HIqciWiKDVGT9dsdQ0ZbIU2YZ6xQoknxVaMhUHGCivIWAEAAAAAAAAAsAAZK+AqyFgBV0HGCrgKMlbAVZCxAq6CjBVwFWSsgKsgYwVcBRkr4CrIWAE3QsYKuBAyVqDTIWMFXAUZKwB6yFgBAACAxjo1Y0W7Nahe7m+5ips1AivIWLHLOGMlm8tW39HH+JY07oCMFbM6K2OlQvLb5BH5RQYZK8Y6NWNFTxAE/wX/1GdTNaogY+UVZKwccGDGil5oLPRCfbH8cLn6KWSsaJCxUslRGSt6mfXM3J25mk8hY0WDjJUmtD9jReN7yyeeFOs1C2SslL0IGSsmtT9jRTMxPpF/ll//y3rNyZGxgowVplqWsULxPB8YCczfmWeztK8gY4UJZKwYqchYoUJjoe6u7uSDut1QZKyYr8wcMlbKGGesUOH3w5n1jMG1qchYsavTMlbKuhzhK+HIR5H0wzTpIp4THtp6AsOBxOLB2V/6kUp8k5j+fNrMvJd/WKYndyavTtKC8pqpFtB7vDdxL0EXcGt7K3Evkfim7CS0dF4ST4mt+JVBPC1q7y67mZ2+Ma3t6vI/52M3Y1OfTdGwcfmJPP9VEx0ey2tDIz+WE2cSU59O9Xv7sxvZi+9eZFW5Jjtbf/7ufHwmTsfjZTYys7dmp2/UmKpmqzNmcyuw0aKMlRZBxgoryFgBAAAAAAAAALAAGSvgKshYAVdBxgq4CjJWwFWQsQKugowVcBVkrICrIGMFXAUZK+AqyFgBN0LGCrgQMlag0yFjBVwFGSsAeshYAQAAgMY6NWNFQ+92ntvM6W+QDswhY8Uu44wVQgjpIis/rii7ykp6ZefpTnYj633d7L2kOhcyVszquIwVusD0hmgcx2XW6t723E2QsWKsgzNWAiOB/M95euG1qqryE3n8cuVvkMhY0SBj5YAzM1bkNVk8eXD7Oem8VH17QmSsaJCxUslpGSscx019OpXNZefuzmXWMguLC4JQ+ds7MlY0yFhpwiFmrPA9vOe4Z38lVr0AGStlL0LGikmHkrEy/fl0cCw44Bso7ZVIF0l+m1x+sFxxyTUyVpCxwlQrM1YCIwH5sby/T3pJUg9S83fnxVOihRZcARkrTCBjxUh1xkqxWPQIuncleMhL8uL5i7KpkLFyeJCxUqZhxkriu8SQb2j88jjP8/4L/on3J1Yer1S0LWSs2NVpGStlpPPSwuKCsqsoiqL1rgMjAaVKbCZGn6XfcwOjB6djqsekjF8ep+NZlF1F2VVMfq9PLiXpkiiKsiqvRq9Hq89yRL+IZtYziqJsbW/Fb8fp1149a2c54rfjdFHpz5DaL7RU5EpkJ79DFyy5lCw7pXNp/wsoHfcgnhQJIdmNrP4EubW1oTEY3WNcOXo9qn0s9YyX2c7WF0+JqfspujCp5VTkSkRRaoyertnqGjLYCm3SuoyVVgyHQcYKK8hYAQAAAAAAAACwABkr4CrIWAFXQcYKuAoyVsBVkLECroKMFXAVZKyAqyBjBVwFGSvgKshYATdCxgq4EDJWoNMhYwVcBRkrAHrIWAEAAIDGOj9jpU/wX/Dnn+bX/7rOMqcDyiFjxa6GGStCn0DvrkRPYKeWU0ehK4+MFWO/OgqNAI6O/fPQdi6l0F+KhDqoc1jo8hwjtpdGmxx1UOcQ0cXADyvgKmjQ4CoH13Ls5Hf0T7wmvmatopk6O/kdM/W1UgYvpq9pWK1ijianaieT66RtdVrEzDa1o2wP/Zr4mvbPckVtcpt16Iah/7S1UPFpIebWCy2ln7Z6qurKnYi+C8e+l5rblK3O6HLY/2DQIo7d0kx01jtt0R66wUXK1QcIa4cMJnX0ux+2q8NOZecc4vWLYX+R2va+KlqC8YG0obIGXV1a3/7o577iLyZnUz2VhToVC8CQ5crOac3MtW5tV8+IPrDTNjRlDbpiYu3IVbM3bG0PfShaNPeKDqtrWrZ+dbWhTbPdOg26HNW7agsq9uuW61jWormz2odZPu61SDsXhnnbMPpSqN/3VM/MwuwtLzGTuVuelwEmX7+0Ik5ozZpWL0zFeqs4LNB/zPrQ5FU3o+J4Wv0XM/Rdl+oTcPXq1JyXvpS+TrNvvnqq6somMdnqbeuwmte67yr6+jXbhp1Z/4rr4ez/Fk+vC0Ed1LHPzgdb2VM64zw0gElo0OAsNrs6aNDgKsdI+ZXaFmiTow7qHCK6GBiCBa6CLge4yv55aPGkaLlE/llee4w6qHO4dY7ZrKKfHHVQ59DroMsBroIGDa6CBg2uggZty9bm1mEvQqt06FtDg4ba+s/2H/YiWNGgQW9tbmn/LM9DP63Nz739hdGWwWl1qh8fVh3C4k3p67Da6GbqGI1Y2drc0j6mTjgAVSyPnV2INrmdOv1n+20uhmPRt2azCMPtZb5O+6KpmGx7Vp8rbUlc2RyPsg7LWnN3+3PCYbDTGTVoJsedFnHasd5+14WwW+GO3WqWae+o4UpusIdm0ofW+pr2O1Lm31h76NuizTpsF4bV912HbC/zk7epy0EXyP5mY7Xh7RdhWI3h0YbVdwPmy9M2HdaHdiUHHnk6l9kGjRXdUli9BppaOfilEFzlGCm/wtoCbXLUQZ1Dr4MxheAq6HKAq2BMIeo4qI793ESMKUQdp9RhkpuI89DgXBzHSZJk5pXr6+v0ARo0ONfcnTn/sN/MK7U74nVqg7b/czGTazCYcNOFVtWliNWVPPXZlH/Yv/3TtvxENnjZxNgEf5zX/tupDdomJhf4O5Zz3pTly6QCI4HIlUhprxT+IFwoFAxe6X/br2/QR/20nUM2PFud/qa8Z73x23FVVSd+O6G15thMTBqUCCFinzh3Z47jav9+0mAPzeqiGeZ1HILhRUWsukAMu1KHsqcXjguJewmO4yavTm5vbtM/+gZ945fHg5eCs3+cjVyJ8Dwvr8nLD5arJ2/iemjL743V2DJWYxy1i32JvQ3vtDGOFMNRAu1vzRzHJb5LCIIw+8fZ9MO09vf1jfXJjybn7sxFr0cJIbP/M1uzNRPze2g79BeeO+Fo6MDBrY5aGOKkXviBlwcP6/U3iHEfmr4rJq2QFnFahwHqOayNpapq+L1woVCY+q+pwGhA+7tv0Dd3b059qX7531+WSqXIx5HgWLBmBVNfClndd8JlbZq+HVa3sHCaw9pYhb1C+PdhVVXjt+Les176x/WN9aXvlyben0jcS4RGQ+mHaX2HRM+oQWsbjEmvzn4pBzYgVkcwJpivFoZjE5uaantz+9on1ziOSy4mBUGgf5z+fDq3kSOE5H/JT16dVFW15rRmvxS6bIyao04C6Is44bPBcHksT55+lJ7/aj5yJZL4OpF+VHtnTPUe79X/94j+sMKE08YCshqC7hCzt2a9p7z+Yb/3da/5qdCgbXFa03Ha8tg0eXXS5MVJGjRocC5VVbXL6EzCmELUcUodJrmJGFMIrnLUL04Cl9nvQ9sc/dKQ/mjitHFsqNOeOu1pY8faMCf9LJw2jg112lOnbW3MSpfD5/P5fD7WywPAQNMNWjorJRYTicUEvdoaoD2kQWn88jjP88Yva65Bi6fFxLcJjuPo7+xebxM/4YAdzrl85bCELoViMzHPiQZdlyYatNAnpJZS2keE6+GSS0lRtNXHAmDLbIMWjgvL3y/rRyMSQnieTy4dXA8FwITB9fsNmWrQXA+X+C4h9NVouIIgJL9LNuzZNKTPonNUVp9DMgjZLg+r7EDCui/E8/zC4oJ42vphv3GD5jgu+U3Se6Zud1k8JSa/S9r5VJHyC4uZ5HowGeTnqIE2rJZHe2s26+ijc+zU0UhnpfTDtP+CqTvL1NP44iRVVUNjIfp4YXFBPz/5ify73/7OzuwrMLnCmPmQQZddwubMtxP+bTh6PUrbI9/DV3Ruiel+iIOutnPiwEzbWCWAuRjXxSW+SfjeOvhlIzYTs/yDjlMaNNvbT7FtQGiLLaW+VBPfJqRzknad3Pbmdj5f+wq+YrFoXM0pDZqUf72wf+8Om22abcYe21ho53y6WC2J/Fj2D/vnv5qXzkmEkPmv57VbzDTLKQ26FYMFHTIOkkkpp60f5uMgC4VCaCwU/Twa/iBsp45TGjQAeUm+vPllbiOnPq89otuM5hr0/Ffz+lsw2RxiAFDNeIx3Q8016NxGLkdyduYH0FLHSFt2tNosnDaODXXaU6dtbQxjCsFVMKYQXOUQxhTaz6KjnDBmzq0wprABbRZMsuiIY8bMudXRGlMI4Fho0OAqjRv0Tn6n4r/0X8V/9X88dA65ghmaQttPdStqql01+GGlujVrkZ30sfbfZmcMYIa+yZlhtIduqlazMwaoQNtPRStqtlEZ7aGra9Wr7rTW7JwLLME87Qiv7wVU/KUhi1fbVfQ9iPPaNHScit5sdf/WTBErDbqiuoW5AlSz+XWQarpBo9VCK1Qf80nzHWjS7Hno6taMMxtHWStOj9ZsUeabmdEeWn+ymbz6uOhL09N2dj5P0LmY3P9EozWk6geE1ZdCk2c50I6PJub3ZtAaUvUD8/DTN1jnwNOjaNDgKmjQ4CrtHlPIJIuOOGbMnFthTCGAI/w/JuYp5Gvv9IwAAAAASUVORK5CYII="/>
+</defs>
+<g id="screen-content">
+<g><svg x="137.5" y="168" width="525" height="700" viewBox="0 0 240 320" preserveAspectRatio="none"><use href="#fs-i0"/></svg></g>
+<g class="fr1"><svg x="137.5" y="168" width="525" height="700" viewBox="0 0 240 320" preserveAspectRatio="none"><use href="#fs-i1"/></svg></g>
+<g class="fr2"><svg x="137.5" y="168" width="525" height="700" viewBox="0 0 240 320" preserveAspectRatio="none"><use href="#fs-i0"/></svg></g>
+</g>
+    <rect id="glass" x="137.5" y="168" width="525" height="700" fill="url(#ip-glass)" pointer-events="none"/>
+    <path d="M131,874 H669" stroke="#3a3a3d" stroke-width="1"/>
+  </g>
+
+  <!-- side creases running down from the frame -->
+  <g id="creases" fill="none" stroke-linecap="round">
+    <path d="M104,880 C104,960 104,1030 112,1110" stroke="#fff" stroke-opacity="0.55" stroke-width="2"/>
+    <path d="M102,880 C102,960 102,1030 110,1110" stroke="#000" stroke-opacity="0.1" stroke-width="1.5"/>
+    <path d="M696,880 C696,960 696,1030 688,1110" stroke="#fff" stroke-opacity="0.45" stroke-width="2"/>
+    <path d="M698,880 C698,960 698,1030 690,1110" stroke="#000" stroke-opacity="0.12" stroke-width="1.5"/>
+  </g>
+
+  <!-- printed wordmarks -->
+  <g id="wordmarks" fill="#262626" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+    <text x="142" y="938" font-size="32" font-weight="500" letter-spacing="0.2">iPAQ</text>
+    <text x="656" y="936" font-size="29" font-weight="500" text-anchor="end">Pocket PC</text>
+  </g>
+
+  <!-- application buttons -->
+  <g id="app-buttons">
+    <g id="btn-calendar" transform="translate(167,1050)">
+      <use href="#ip-dish-btn"/>
+      <g fill="#111" transform="translate(-9,-8)">
+        <rect width="18" height="4" rx="1"/>
+        <rect y="5.5" width="4.2" height="3.4"/><rect x="4.6" y="5.5" width="4.2" height="3.4"/><rect x="9.2" y="5.5" width="4.2" height="3.4"/><rect x="13.8" y="5.5" width="4.2" height="3.4"/>
+        <rect y="9.8" width="4.2" height="3.4"/><rect x="4.6" y="9.8" width="4.2" height="3.4"/><rect x="9.2" y="9.8" width="4.2" height="3.4"/><rect x="13.8" y="9.8" width="4.2" height="3.4"/>
+        <rect y="14.1" width="4.2" height="3.4"/><rect x="4.6" y="14.1" width="4.2" height="3.4"/><rect x="9.2" y="14.1" width="4.2" height="3.4"/>
+      </g>
+    </g>
+    <g id="btn-contacts" transform="translate(233,1002)">
+      <use href="#ip-dish-btn"/>
+      <g transform="translate(-10,-9)">
+        <rect width="20" height="18" rx="1.5" fill="#111"/>
+        <circle cx="6" cy="6" r="2.6" fill="#cfd0d2"/>
+        <path d="M2,14.5 Q2,9.6 6,9.6 Q10,9.6 10,14.5 Z" fill="#cfd0d2"/>
+        <rect x="12" y="4" width="6" height="1.8" fill="#cfd0d2"/><rect x="12" y="8" width="6" height="1.8" fill="#cfd0d2"/><rect x="12" y="12" width="6" height="1.8" fill="#cfd0d2"/>
+      </g>
+    </g>
+    <g id="btn-mail" transform="translate(567,1002)">
+      <use href="#ip-dish-btn"/>
+      <g transform="translate(-10.5,-7.5)" fill="none" stroke="#111" stroke-width="2.2" stroke-linejoin="round">
+        <rect width="21" height="15" rx="1"/>
+        <path d="M0,0 L10.5,8.5 L21,0 M0,15 L8,7 M21,15 L13,7"/>
+      </g>
+    </g>
+    <g id="btn-home" transform="translate(633,1050)">
+      <use href="#ip-dish-btn"/>
+      <g transform="translate(-10,-10)" fill="#111">
+        <path d="M10,0 L21,9.5 H18 V20 H12.5 V13.5 H7.5 V20 H2 V9.5 H-1 Z"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- navigation pad: chrome housing protruding at the bottom edge -->
+  <g id="navpad">
+    <path id="housing-shadow" d="M314,946 Q400,922 486,946 C503,951 511,960 513,974 L527,1108 C528,1122 520,1129 506,1130 H294 C280,1129 272,1122 273,1108 L287,974 C289,960 297,951 314,946 Z" fill="#000" fill-opacity="0.35" filter="url(#ip-soft)" transform="translate(0,3)"/>
+    <path id="housing" d="M314,946 Q400,922 486,946 C503,951 511,960 513,974 L527,1108 C528,1122 520,1129 506,1130 H294 C280,1129 272,1122 273,1108 L287,974 C289,960 297,951 314,946 Z" fill="url(#ip-housing)" stroke="#2a2b2d" stroke-width="1.2"/>
+    <path d="M314,946 Q400,922 486,946 C503,951 511,960 513,974 L527,1108 C528,1122 520,1129 506,1130 H294 C280,1129 272,1122 273,1108 L287,974 C289,960 297,951 314,946 Z" fill="url(#ip-housing-v)"/>
+    <path d="M316,951 Q400,929 484,951" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="2"/>
+    <path d="M494,960 L506,1100" stroke="#fff" stroke-opacity="0.8" stroke-width="5" filter="url(#ip-soft)"/>
+    <path d="M300,975 L292,1095" stroke="#fff" stroke-opacity="0.45" stroke-width="3" filter="url(#ip-soft)"/>
+    <g id="joystick" transform="translate(400,1052)">
+      <circle r="72" fill="#18191b"/>
+      <circle r="68" fill="url(#ip-chrome-ring)"/>
+      <circle r="58" fill="#141516"/>
+      <circle r="55" fill="url(#ip-joy)"/>
+      <circle r="55" fill="url(#ip-joy-rim)"/>
+      <path d="M-44,-20 Q-30,-46 2,-50 Q-26,-40 -38,-14 Z" fill="#fff" fill-opacity="0.6" filter="url(#ip-soft)"/>
+      <path d="M28,36 Q46,18 46,-6 Q52,22 34,40 Z" fill="#fff" fill-opacity="0.75" filter="url(#ip-soft)"/>
+      <circle r="24" fill="url(#ip-dimple)" fill-opacity="0.45"/>
+      <ellipse cx="4" cy="8" rx="13" ry="5" fill="#fff" fill-opacity="0.25" filter="url(#ip-soft)"/>
+    </g>
+  </g>
+</g>
+
+<!-- notes: vector annotations above the whole device -->
+<g class="nt0"><g transform="translate(137.5 168) scale(2.1875 2.1875)"><g class="notes" font-family="DejaVu Sans,Verdana,Arial,Helvetica,sans-serif" font-weight="700"><g><title>terminal, no keyboard</title><rect x="1.2" y="117" width="140.64" height="18" rx="3" fill="#285ac8" stroke="#fff" stroke-width="1"/><text x="6" y="129.84" font-size="12" fill="#fff" textLength="131.04" lengthAdjust="spacingAndGlyphs">terminal, no keyboard</text></g><g><title>highlight</title><rect x="0" y="296" width="40" height="22" rx="2" fill="none" stroke="#fff" stroke-width="4"/><rect x="0" y="296" width="40" height="22" rx="2" fill="none" stroke="#285ac8" stroke-width="2"/></g></g></g></g>
+<g class="nt1"><g transform="translate(137.5 168) scale(2.1875 2.1875)"><g class="notes" font-family="DejaVu Sans,Verdana,Arial,Helvetica,sans-serif" font-weight="700"><g><title>keyboard up: the prompt is hidden</title><rect x="1.2" y="117" width="215.52" height="18" rx="3" fill="#dc1e1e" stroke="#fff" stroke-width="1"/><text x="6" y="129.84" font-size="12" fill="#fff" textLength="205.92" lengthAdjust="spacingAndGlyphs">keyboard up: the prompt is hidden</text></g><g fill="none" stroke-linecap="round" stroke-linejoin="round"><title>arrow</title><line x1="120" y1="140" x2="120" y2="206.84" stroke="#fff" stroke-width="6"/><polygon points="120,215 113.4798,203.0649 126.5202,203.0649" fill="#fff" stroke="#fff" stroke-width="2"/><line x1="120" y1="140" x2="120" y2="206.84" stroke="#dc1e1e" stroke-width="4"/><polygon points="120,215 113.4798,203.0649 126.5202,203.0649" fill="#dc1e1e" stroke="none"/></g></g></g></g>
+<g class="nt2"><g transform="translate(137.5 168) scale(2.1875 2.1875)"><g class="notes" font-family="DejaVu Sans,Verdana,Arial,Helvetica,sans-serif" font-weight="700"><g><title>keyboard away</title><rect x="1.2" y="117" width="90.72" height="18" rx="3" fill="#285ac8" stroke="#fff" stroke-width="1"/><text x="6" y="129.84" font-size="12" fill="#fff" textLength="81.12" lengthAdjust="spacingAndGlyphs">keyboard away</text></g></g></g></g>
+<text font-family="'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="24" fill="#888" text-anchor="middle"><tspan x="400" y="1218.8125">Illustration: headless picowl 0.6.2 plus picowl PR 126 in a</tspan><tspan x="400" y="1250.0125">container with the real wvkbd-ipaq keyboard, not a device</tspan><tspan x="400" y="1281.2125">capture</tspan></text>
+</svg>
