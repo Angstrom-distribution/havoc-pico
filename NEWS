@@ -1,0 +1,119 @@
+# CHANGES IN UNRELEASED (pico):
+
+        The pico branch is upstream havoc at commit 73e3467 (version
+        0.7.0-git) with five patches for handhelds with a QVGA-class
+        panel and about 64 MiB of RAM. There is no pico release or tag
+        yet. Status says what is recorded about where they ran.
+
+##        On-screen keyboard:
+
+        * Havoc binds zwp_text_input_manager_v3 when the compositor
+          offers it. On keyboard focus it enables a text input with
+          content type terminal and the cursor cell as the cursor
+          rectangle, and disables it when the focus leaves, so a
+          compositor that shows an on-screen keyboard for text fields
+          shows one for the terminal. Enabling happens once per focus.
+          Keys still arrive through wl_keyboard; the text events are
+          ignored.
+
+##        Damage:
+
+        * A redraw damages only the cells that changed, found from a
+          key per cell (symbol, width and the two colours after cursor,
+          selection and inverse are applied), not from libtsm's ages.
+          Each buffer remembers what it was painted with, so only
+          changed cells are painted. One rectangle per run of changed
+          rows, a bounding box above eight runs, the whole surface when
+          three quarters of the cells changed. A frame with no change
+          is not committed.
+
+        * At opacity 255 the window sets its opaque region to the whole
+          surface and uses XRGB8888 buffers.
+
+        * A narrow character written over half of a wide one clears the
+          other half, and a wide cell in the last column is clipped.
+
+        * HAVOC_FULL_REDRAW in the environment paints and damages
+          everything on every redraw, as a reference for tests.
+
+##        Emoji:
+
+        * A code point at or above U+2000 that is in a wvkbd emoji pack
+          (emoji-10.pack, emoji-12.pack, emoji-16.pack, emoji-24.pack)
+          is drawn as that picture, in colour, two cells wide. The pack
+          is the largest that fits two cells by one, or the next smaller
+          one when that file is missing or refused. Without a pack the
+          code point is drawn from the font as before.
+
+        * A pack is untrusted input: every offset, length and count is
+          checked before use, and a pack that fails is not used. The
+          directory is -E DIR, else HAVOC_EMOJI_DIR, else the Makefile's
+          EMOJI_DIR (/usr/share/wvkbd/emoji).
+
+        * libtsm has a callback, tsm_screen_set_picture_cb(), that gives
+          two cells to every code point a pack has. A picture is never
+          cut at the right margin.
+
+##        Bitmap fonts:
+
+        * [font] pixel=yes draws the text from the X11 misc-fixed bitmap
+          fonts, compiled in: 5x8, 6x10, 6x12, 6x13, 7x13, 7x14, 9x18
+          and 10x20, 122 KB together. Each cell is the foreground or
+          the background colour, nothing blended. pixel=yes picks the
+          largest font not higher than [font] size, and from size 40 the
+          10x20 font in whole multiples, so the zoom keys work.
+          pixel=<name>, such as pixel=6x13, picks one font. No outline
+          font is opened in this mode. The default is the outline font,
+          with the same pixels as before.
+
+        * A code point a font lacks is drawn as the font's empty box.
+          Bold, underline and blink are not drawn, as in havoc.
+
+##        C8 buffers:
+
+        * [window] c8=yes draws 8-bit indexed (C8) buffers, a quarter of
+          the bytes of XRGB8888, and sends the colours with the
+          picowl-palette-v1 protocol. It applies only while the
+          compositor offers that protocol and the C8 shm format, reports
+          the window as exclusive on its output, opacity is 255 and a
+          bitmap font is in use. Otherwise, and after any change of
+          these, havoc draws XRGB8888 and repaints the whole window.
+
+        * The palette has the xterm 6x6x6 cube at 16 to 231 and 40 slots
+          for the other colours the cells use. A colour with no slot
+          left is drawn as the nearest cube colour until the next
+          redraw, which starts the table over. Emoji are drawn in the
+          nearest colours without taking slots.
+
+##        Build:
+
+        * PIXFONT_OBJ=pixfont-none.o builds without the bitmap font
+          data. PICOWL_PALETTE_XML names the picowl-palette-v1.xml file
+          (it comes with picowl, not with this tree); without it havoc
+          has no C8 code. EMOJI_DIR sets the default pack directory.
+
+##        Status:
+
+        * The pico branch has no test suite, and this repository records
+          no test results or device runs for these patches.
+
+        * havoc.cfg does not list the keys [window] c8 and [font] pixel
+          yet.
+
+        * Not shown: no pictures of the bitmap fonts, the emoji or a C8
+          window have been made yet. They are needed before a release.
+
+        * Sixel and a subset of the kitty graphics protocol, with the
+          make variables HAVOC_SIXEL, HAVOC_KITTY and HAVOC_PNG, the
+          [graphics] keys and a test suite, are in pull request 1
+          (branch graphics) and not on pico. Its NEWS entry goes with
+          that pull request.
+
+##        Compatibility:
+
+        * New config keys: [window] c8, [font] pixel. New option: -E.
+          New environment variables: HAVOC_EMOJI_DIR,
+          HAVOC_FULL_REDRAW. New make variables: EMOJI_DIR, PIXFONT_OBJ,
+          PICOWL_PALETTE_XML. With none of them set, havoc behaves as
+          upstream except for the damage and the opaque region, and
+          code points that a pack in the default directory has.
