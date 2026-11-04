@@ -95,6 +95,8 @@ static struct {
 	struct wl_seat *seat;
 	struct zwp_text_input_manager_v3 *tim;
 	struct zwp_text_input_v3 *ti;
+	bool ti_enabled;	/* text input is enabled: the focus is ours */
+	int ti_x, ti_y;		/* the cursor cell of the rectangle last sent */
 
 	struct wl_surface *surf;
 	struct xdg_surface *xdgsurf;
@@ -1259,6 +1261,8 @@ static void c8_send_palette(void)
 	term.colours.dirty = false;
 }
 
+static void ti_update_cursor(void);
+
 static void redraw(void)
 {
 	struct buffer *buffer;
@@ -1268,6 +1272,7 @@ static void redraw(void)
 	bool full;
 
 	c8_update();
+	ti_update_cursor();
 	tsm_screen_draw(term.screen, collect_cell, NULL);
 
 	/* What the compositor shows is only known to be what we last
@@ -1551,33 +1556,58 @@ static void kbd_leave(void *data, struct wl_keyboard *k, uint32_t serial,
  * preedit events are ignored. The compositor sends enter and leave when the
  * keyboard focus moves to or from the surface; enabling there means once per
  * focus, never per key, so an on-screen keyboard that was hidden by hand
- * stays hidden until the focus comes back. */
-static void ti_enter(void *data, struct zwp_text_input_v3 *ti,
-		     struct wl_surface *surf)
+ * stays hidden until the focus comes back. The cursor rectangle follows the
+ * cursor cell (ti_update_cursor), so that the compositor can keep the cursor
+ * clear of the on-screen keyboard. */
+/* The cursor rectangle in surface coordinates, from the cursor cell. The
+ * compositor moves the window up when the on-screen keyboard would cover it,
+ * so it has to follow the cursor: it is sent again whenever the cursor cell
+ * changes (from redraw, so at most once per frame). */
+static void ti_send_cursor(struct zwp_text_input_v3 *ti)
 {
+	int cx = 0, cy = 0;
 	int x = destination(term.margin.left);
 	int y = destination(term.margin.top);
 	int w = destination(term.cwidth);
 	int h = destination(term.cheight);
 
 	if (term.screen) {
-		x += destination(term.cwidth *
-				 tsm_screen_get_cursor_x(term.screen));
-		y += destination(term.cheight *
-				 tsm_screen_get_cursor_y(term.screen));
+		cx = tsm_screen_get_cursor_x(term.screen);
+		cy = tsm_screen_get_cursor_y(term.screen);
+		x += destination(term.cwidth * cx);
+		y += destination(term.cheight * cy);
 	}
+	term.ti_x = cx;
+	term.ti_y = cy;
+	zwp_text_input_v3_set_cursor_rectangle(ti, x, y, w, h);
+	zwp_text_input_v3_commit(ti);
+}
 
+static void ti_update_cursor(void)
+{
+	if (!term.ti || !term.ti_enabled || !term.screen)
+		return;
+	if (tsm_screen_get_cursor_x(term.screen) == term.ti_x &&
+	    tsm_screen_get_cursor_y(term.screen) == term.ti_y)
+		return;
+	ti_send_cursor(term.ti);
+}
+
+static void ti_enter(void *data, struct zwp_text_input_v3 *ti,
+		     struct wl_surface *surf)
+{
 	zwp_text_input_v3_enable(ti);
 	zwp_text_input_v3_set_content_type(ti,
 		ZWP_TEXT_INPUT_V3_CONTENT_HINT_NONE,
 		ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_TERMINAL);
-	zwp_text_input_v3_set_cursor_rectangle(ti, x, y, w, h);
-	zwp_text_input_v3_commit(ti);
+	term.ti_enabled = true;
+	ti_send_cursor(ti);
 }
 
 static void ti_leave(void *data, struct zwp_text_input_v3 *ti,
 		     struct wl_surface *surf)
 {
+	term.ti_enabled = false;
 	zwp_text_input_v3_disable(ti);
 	zwp_text_input_v3_commit(ti);
 }
