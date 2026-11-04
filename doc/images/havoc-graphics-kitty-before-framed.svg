@@ -1,0 +1,329 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="366" height="581.6914" viewBox="-0.3125 -0.4375 800.625 1272.45">
+<!--
+  HP iPAQ h2200, front view. Glass: <rect id="screen"> x=137.5 y=168 width=525 height=700 (3:4).
+
+  SPDX-FileCopyrightText: 2026 Koen Kooi
+  SPDX-License-Identifier: CC-BY-SA-4.0
+
+  Provenance: an original vector drawing, written as SVG geometry and
+  gradients and drawn with the assistance of Claude (Opus 5.5) from
+  photographs of the author's own iPAQ h2200. No third-party artwork was
+  traced or embedded. "HP", "iPAQ" and "Pocket PC" are trademarks of their
+  owners and appear only to identify the device.
+-->
+<defs>
+  <linearGradient id="ip-face-h" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#7b7467"/>
+    <stop offset="0.022" stop-color="#a49c8c"/>
+    <stop offset="0.058" stop-color="#bdb5a5"/>
+    <stop offset="0.066" stop-color="#ede7da"/>
+    <stop offset="0.076" stop-color="#d3cbbb"/>
+    <stop offset="0.3" stop-color="#d8d1c2"/>
+    <stop offset="0.62" stop-color="#cdc5b5"/>
+    <stop offset="0.924" stop-color="#bfb7a7"/>
+    <stop offset="0.933" stop-color="#e0d9cb"/>
+    <stop offset="0.942" stop-color="#aaa292"/>
+    <stop offset="0.975" stop-color="#8f8879"/>
+    <stop offset="1" stop-color="#6a6459"/>
+  </linearGradient>
+  <linearGradient id="ip-face-v" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.4"/>
+    <stop offset="0.09" stop-color="#fff" stop-opacity="0.12"/>
+    <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="0.78" stop-color="#000" stop-opacity="0.05"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.22"/>
+  </linearGradient>
+  <linearGradient id="ip-sheen" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="0.35" stop-color="#fff" stop-opacity="0.12"/>
+    <stop offset="0.45" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+  <pattern id="ip-brush" width="6" height="3" patternUnits="userSpaceOnUse">
+    <rect width="6" height="1" fill="#fff" fill-opacity="0.045"/>
+    <rect y="2" width="6" height="0.6" fill="#000" fill-opacity="0.018"/>
+  </pattern>
+  <!-- rubber side grips: x1 = outer rounded edge, x2 = seam against the faceplate -->
+  <linearGradient id="ip-rail" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#1a1a1c"/>
+    <stop offset="0.07" stop-color="#3b3b3f"/>
+    <stop offset="0.16" stop-color="#4a4a4f"/>
+    <stop offset="0.32" stop-color="#2a2a2d"/>
+    <stop offset="0.6" stop-color="#1b1b1d"/>
+    <stop offset="0.84" stop-color="#202023"/>
+    <stop offset="0.92" stop-color="#38383c"/>
+    <stop offset="0.96" stop-color="#2a2a2d"/>
+    <stop offset="1" stop-color="#0c0c0d"/>
+  </linearGradient>
+  <linearGradient id="ip-rail-r" href="#ip-rail" x1="1" y1="0" x2="0" y2="0"/>
+  <linearGradient id="ip-rail-v" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.16"/>
+    <stop offset="0.05" stop-color="#fff" stop-opacity="0.04"/>
+    <stop offset="0.3" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="0.9" stop-color="#000" stop-opacity="0.08"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.35"/>
+  </linearGradient>
+  <pattern id="ip-rail-tex" width="3" height="3" patternUnits="userSpaceOnUse">
+    <circle cx="0.8" cy="0.8" r="0.55" fill="#fff" fill-opacity="0.05"/>
+    <circle cx="2.3" cy="2.2" r="0.6" fill="#000" fill-opacity="0.18"/>
+  </pattern>
+  <path id="ip-grip-l" d="M66,63 C50,67 41,90 41,120 V985 C46,700 60,300 66,63 Z"/>
+  <path id="ip-grip-r" d="M734,63 C750,67 759,90 759,120 V985 C754,700 740,300 734,63 Z"/>
+  <linearGradient id="ip-bev-top" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#faf8f3"/><stop offset="1" stop-color="#d8d3c9"/>
+  </linearGradient>
+  <linearGradient id="ip-bev-bot" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#a39e93"/><stop offset="1" stop-color="#e9e5dd"/>
+  </linearGradient>
+  <linearGradient id="ip-bev-l" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#e8e4dc"/><stop offset="1" stop-color="#c3beb3"/>
+  </linearGradient>
+  <linearGradient id="ip-bev-r" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#aaa59a"/><stop offset="1" stop-color="#cfcac0"/>
+  </linearGradient>
+  <linearGradient id="ip-bezel" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1b1b1d"/><stop offset="1" stop-color="#0a0a0b"/>
+  </linearGradient>
+  <linearGradient id="ip-glass" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity="0.06"/>
+    <stop offset="0.45" stop-color="#fff" stop-opacity="0.012"/>
+    <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="ip-led-a" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#3b1a05"/><stop offset="0.5" stop-color="#d9741c"/><stop offset="1" stop-color="#4a2006"/>
+  </linearGradient>
+  <linearGradient id="ip-led-b" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8a6a35"/><stop offset="0.5" stop-color="#fff3c8"/><stop offset="1" stop-color="#9a7a40"/>
+  </linearGradient>
+  <radialGradient id="ip-dish" cx="0.5" cy="0.5" r="0.5" fx="0.6" fy="0.72">
+    <stop offset="0.6" stop-color="#8f8a80"/><stop offset="0.85" stop-color="#d7d2c8"/><stop offset="1" stop-color="#f6f3ec"/>
+  </radialGradient>
+  <linearGradient id="ip-dish-rim" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#8d887d"/><stop offset="1" stop-color="#fbf9f4"/>
+  </linearGradient>
+  <radialGradient id="ip-chrome" cx="0.5" cy="0.5" r="0.5" fx="0.38" fy="0.3">
+    <stop offset="0" stop-color="#ffffff"/>
+    <stop offset="0.22" stop-color="#d9dadb"/>
+    <stop offset="0.5" stop-color="#6d6e70"/>
+    <stop offset="0.72" stop-color="#2c2d2f"/>
+    <stop offset="0.86" stop-color="#9a9b9d"/>
+    <stop offset="1" stop-color="#404143"/>
+  </radialGradient>
+  <linearGradient id="ip-chrome-ring" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0" stop-color="#f4f4f4"/><stop offset="0.3" stop-color="#707174"/>
+    <stop offset="0.55" stop-color="#1e1f21"/><stop offset="0.8" stop-color="#c9cacc"/><stop offset="1" stop-color="#fff"/>
+  </linearGradient>
+  <linearGradient id="ip-housing" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#5b5c5f"/>
+    <stop offset="0.08" stop-color="#e9eaeb"/>
+    <stop offset="0.16" stop-color="#8c8d90"/>
+    <stop offset="0.3" stop-color="#3a3b3e"/>
+    <stop offset="0.55" stop-color="#2a2b2d"/>
+    <stop offset="0.78" stop-color="#6f7073"/>
+    <stop offset="0.86" stop-color="#ffffff"/>
+    <stop offset="0.92" stop-color="#a5a6a8"/>
+    <stop offset="1" stop-color="#4a4b4e"/>
+  </linearGradient>
+  <linearGradient id="ip-housing-v" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#000" stop-opacity="0.55"/>
+    <stop offset="0.22" stop-color="#000" stop-opacity="0.1"/>
+    <stop offset="0.5" stop-color="#fff" stop-opacity="0.18"/>
+    <stop offset="0.8" stop-color="#fff" stop-opacity="0.05"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.35"/>
+  </linearGradient>
+  <linearGradient id="ip-joy" x1="0.2" y1="0" x2="0.5" y2="1">
+    <stop offset="0" stop-color="#2b2c2e"/>
+    <stop offset="0.3" stop-color="#55565a"/>
+    <stop offset="0.48" stop-color="#c9cacc"/>
+    <stop offset="0.56" stop-color="#f4f4f4"/>
+    <stop offset="0.68" stop-color="#7c7d80"/>
+    <stop offset="0.85" stop-color="#3a3b3e"/>
+    <stop offset="1" stop-color="#b6b7b9"/>
+  </linearGradient>
+  <radialGradient id="ip-joy-rim" cx="0.5" cy="0.5" r="0.5">
+    <stop offset="0.7" stop-color="#000" stop-opacity="0"/>
+    <stop offset="0.92" stop-color="#000" stop-opacity="0.35"/>
+    <stop offset="1" stop-color="#000" stop-opacity="0.6"/>
+  </radialGradient>
+  <radialGradient id="ip-dimple" cx="0.5" cy="0.5" r="0.5" fx="0.55" fy="0.62">
+    <stop offset="0" stop-color="#111"/><stop offset="0.7" stop-color="#2d2e30"/><stop offset="1" stop-color="#8e8f92" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="ip-shadow" x="-10%" y="-10%" width="120%" height="125%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="12"/>
+    <feOffset dy="10" result="b"/>
+    <feFlood flood-color="#000" flood-opacity="0.35"/>
+    <feComposite in2="b" operator="in"/>
+  </filter>
+  <filter id="ip-soft" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur stdDeviation="1.6"/>
+  </filter>
+  <clipPath id="ip-face-clip">
+    <path d="M41,120 C41,84 62,66 102,59 Q400,24 698,59 C738,66 759,84 759,120 V1040 C759,1075 740,1095 690,1104 C550,1139 250,1139 110,1104 C60,1095 41,1075 41,1040 Z"/>
+  </clipPath>
+  <clipPath id="ip-frame-clip"><rect x="104" y="135" width="592" height="752" rx="16"/></clipPath>
+  <g id="ip-dish-btn">
+    <circle r="35" fill="url(#ip-dish-rim)"/>
+    <circle r="32.5" fill="url(#ip-dish)"/>
+    <circle r="25.5" fill="#1d1d1f"/>
+    <circle r="24" fill="url(#ip-chrome)"/>
+    <ellipse cx="-7" cy="-11" rx="11" ry="5" fill="#fff" fill-opacity="0.45" filter="url(#ip-soft)"/>
+  </g>
+</defs>
+
+<path id="shadow" d="M41,120 C41,84 62,66 102,59 Q400,24 698,59 C738,66 759,84 759,120 V1040 C759,1075 740,1095 690,1104 C550,1139 250,1139 110,1104 C60,1095 41,1075 41,1040 Z" fill="#000" filter="url(#ip-shadow)"/>
+<g id="device">
+  <g id="face">
+    <path id="face-base" d="M41,120 C41,84 62,66 102,59 Q400,24 698,59 C738,66 759,84 759,120 V1040 C759,1075 740,1095 690,1104 C550,1139 250,1139 110,1104 C60,1095 41,1075 41,1040 Z" fill="url(#ip-face-h)" stroke="#6f6a60" stroke-width="1.5"/>
+    <g clip-path="url(#ip-face-clip)">
+      <rect x="41" y="30" width="718" height="1096" fill="url(#ip-face-v)"/>
+      <rect x="41" y="30" width="718" height="1096" fill="url(#ip-brush)"/>
+      <rect x="41" y="30" width="718" height="1096" fill="url(#ip-sheen)"/>
+      <!-- top edge highlight and lower chamfer -->
+      <path d="M100,62 Q400,28 700,62" fill="none" stroke="#fff" stroke-opacity="0.75" stroke-width="2"/>
+      <path d="M47,1040 C47,1068 64,1086 112,1097 C250,1130 550,1130 688,1097 C736,1086 753,1068 753,1040" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="5"/>
+    </g>
+  </g>
+
+  <!-- black rubber side grips, slightly proud of the faceplate -->
+  <g id="rails">
+    <g id="rail-groove" clip-path="url(#ip-face-clip)" fill="none">
+      <path d="M66,67 C65,300 52,700 41,985 M734,67 C735,300 748,700 759,985" stroke="#000" stroke-opacity="0.45" stroke-width="5" filter="url(#ip-soft)"/>
+      <path d="M71,74 C70,300 57,700 46,960 M729,74 C730,300 743,700 754,960" stroke="#fff" stroke-opacity="0.35" stroke-width="1.5"/>
+    </g>
+    <g id="grip-left">
+      <use href="#ip-grip-l" fill="url(#ip-rail)"/>
+      <use href="#ip-grip-l" fill="url(#ip-rail-v)"/>
+      <use href="#ip-grip-l" fill="url(#ip-rail-tex)"/>
+      <path d="M54,72 C47,80 44,100 44,120 V700" fill="none" stroke="#fff" stroke-opacity="0.1" stroke-width="3" filter="url(#ip-soft)"/>
+      <path d="M66.6,66 C65.6,300 52.6,700 41.6,975" fill="none" stroke="#5a5a5f" stroke-opacity="0.55" stroke-width="1"/>
+      <path d="M66,63 C50,67 41,90 41,120" fill="none" stroke="#6a6a6f" stroke-opacity="0.5" stroke-width="1.2"/>
+    </g>
+    <g id="grip-right">
+      <use href="#ip-grip-r" fill="url(#ip-rail-r)"/>
+      <use href="#ip-grip-r" fill="url(#ip-rail-v)"/>
+      <use href="#ip-grip-r" fill="url(#ip-rail-tex)"/>
+      <path d="M746,72 C753,80 756,100 756,120 V700" fill="none" stroke="#fff" stroke-opacity="0.08" stroke-width="3" filter="url(#ip-soft)"/>
+      <path d="M733.4,66 C734.4,300 747.4,700 758.4,975" fill="none" stroke="#5a5a5f" stroke-opacity="0.45" stroke-width="1"/>
+      <path d="M734,63 C750,67 759,90 759,120" fill="none" stroke="#6a6a6f" stroke-opacity="0.4" stroke-width="1.2"/>
+    </g>
+  </g>
+
+  <!-- status LEDs, top left -->
+  <g id="leds">
+    <rect x="174" y="62" width="14" height="56" rx="7" fill="#7d786d"/>
+    <rect x="176" y="64" width="10" height="52" rx="5" fill="url(#ip-led-a)"/>
+    <rect x="203" y="62" width="14" height="56" rx="7" fill="#7d786d"/>
+    <rect x="205" y="64" width="10" height="52" rx="5" fill="url(#ip-led-b)"/>
+    <rect x="178" y="70" width="2.5" height="36" rx="1.2" fill="#fff" fill-opacity="0.35"/>
+    <rect x="207" y="70" width="2.5" height="36" rx="1.2" fill="#fff" fill-opacity="0.7"/>
+  </g>
+
+  <!-- power button, top right -->
+  <g id="power" transform="translate(606,98)">
+    <circle r="31" fill="url(#ip-dish-rim)"/>
+    <circle r="28.5" fill="url(#ip-dish)"/>
+    <circle r="21.5" fill="#1d1d1f"/>
+    <circle r="20" fill="url(#ip-chrome)"/>
+    <ellipse cx="-6" cy="-9" rx="9" ry="4" fill="#fff" fill-opacity="0.45" filter="url(#ip-soft)"/>
+    <path d="M-5.2,-6.5 A9,9 0 1 0 5.2,-6.5" fill="none" stroke="#111" stroke-width="2.8" stroke-linecap="round" transform="translate(0,2)"/>
+    <line x1="0" y1="-9.5" x2="0" y2="0.5" stroke="#111" stroke-width="2.8" stroke-linecap="round"/>
+  </g>
+
+  <!-- raised frame around the display: mitred bevel, bezel, glass -->
+  <g id="frame">
+    <g clip-path="url(#ip-frame-clip)">
+      <polygon points="104,135 696,135 670,159 130,159" fill="url(#ip-bev-top)"/>
+      <polygon points="104,887 696,887 670,875 130,875" fill="url(#ip-bev-bot)"/>
+      <polygon points="104,135 130,159 130,875 104,887" fill="url(#ip-bev-l)"/>
+      <polygon points="696,135 670,159 670,875 696,887" fill="url(#ip-bev-r)"/>
+    </g>
+    <rect x="104" y="135" width="592" height="752" rx="16" fill="none" stroke="#8a8579" stroke-opacity="0.6" stroke-width="1"/>
+    <rect id="bezel" x="130" y="159" width="540" height="716" rx="7" fill="url(#ip-bezel)"/>
+    <rect x="130.5" y="159.5" width="539" height="715" rx="7" fill="none" stroke="#000" stroke-width="1"/>
+    <rect x="135.5" y="166" width="529" height="704" rx="3" fill="#050506" stroke="#2c2c2e" stroke-width="1"/>
+    <rect id="screen" x="137.5" y="168" width="525" height="700" fill="#000"/>
+    <defs>
+<image id="fs-i0" width="240" height="320" style="image-rendering:crisp-edges;image-rendering:pixelated" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAFACAIAAAANimYEAAAPtElEQVR4nO3dX2gbV77A8dOgCxPwhRG4MAIvZCCByLQQiQYikzx4Si54llyIjAuxyEOqbSFVWth1NtBYm4dcOYWuk4dcORdSOxcS5ECDXEiwAjEeP3gZFVKkCynSQoJV8MIYapAeDJmHQO/DKLIs2fL4X+K43w9+kDVz5ox0fjpz5sw5M0IAAN4BsiwP/HlgGzcoSVL6+3ToWGhLW/EI7aSWvJlMf58O94W3add2Kl+9R09/n269Tv/Z/uEbw1vev50S/Sw6/O3u3b0VmspoX8Niv9+/vfl1nejyvu/dyjb0Hn301qhlWelH6WKxuF27tkP5+jp8XSe6Wq/TeagzcCSw1tLkreTg14ObW7ot/If8/g+2NQx2THMZeZwFsixHzkTCfeHOQ51m1iw8K1z4ywV7yX6re1ul9+jGjDH0zdCeyTd+Jd5iqU/x2faa33zrpb83zWVUDej4lbj/oH/om6Ho2ejwzWG9R5ckaUMBHT4dDgaCkiTlnuUmfphoSKt1a1q35iwSr6pvSpKkndQCRwJer7dUKhlTRvGfdRWhR8Q+iwkhukJd1rwVOx8TQphPzfxP+fXTbkXLfDcqdDzU6e9M3U85X4h+Slc7VCGEtWhNPJhoWNnJy+fzSZLkvLYWrIkfJtZdqh5U9ZP62L2x2tcuSVL0XNSY2cDXop/Su452TWYmV/kUx0Kqqo4/GNd7dO2EZv1qpe6lFhYWXJaCExvOlr3vezOPMtWdbJMiZyL+Q37rVyvzKNNc+pnHGVVVmyOnRRntcz58+HR45LuRXD5XXirnf8oP/ddQZbHi8ouQJGny4eTIrZHAkYD9yo6ei0bPRetXiPRFhm8MK4oy/O3wdGa6/hscvjbs8/nsJTt8Kjz5eFLv0Zc365HUQ6p6SJUkyev1Oq+9Xq+btFvROt8NCZ8Op+6lyovlWpz5FJ96SA33hZ0yaODkJbfJtXx9HT43S8uL5YFLA+HTyw197aQWvxwvL5Xd7Kf/sN+cNYevDSuKkrqfCnzU2BzSurULX10YvjacvJn0KT79pN57ule4KAVny4lrCbldTt1LJa4mah9ckiTjsZG4kpBlOdIfmXw8qXVrtYSSJMWvxBNXE6tGzvplNP1kOnkzqXQoyVtJN19BvcGvB615a7lR6BHqAbWacZtkWdb0k2lJkoQQ2knNsiy5XXaWyu2y874jNZ6aNqZFk8nMZPM5isu0W7FqvuuKfha1LEsI0X+mf640t+rPLHE10WJv0xPpFqeMay0dvT06+XC5ck3dTa17bloz+PWgOWtKbZIQwn/Yb1lWQz3tFHHyVlKWX5edLAsXpVC/ZfWgWr9lrVuz5i31oCpedx6M3h6tJWwdOTXNZVQ9KRz6+1BXqMucMYOBoN6jv26JuPLH//xjLp/L/9/rI/IrUfqlVL+CMWM4zT4zawohukLVc6bKYsW2bUmSQsdD+im9vFhW/6C6zHQrad+A6Lno9RvX//T5nzKPM28mx7G7Y8GjQSc+5HZZ69bG7o25TNt1osvMms5hpPjPYkPxVXnE2J2xSqV63HZerFsKWrdW23LpRal+y1q3VnheKL0oCSFs285MZbpOdDUE3lqR00I1oI0pI3g0ePHSRUmShm8M557mlA7F1ZfhEWqHaswaLVbJ/1yNdXvJFq9E7VeuKEr6+3ShWEhcTUTPRoOB4P62/a4y3Vpax+DXg2bWdP5Cx7fWsdhk4NJAuVLWTmjrr7pNsv/Iln4p9Z/pF0JE+iLlpbLL35LUJgU/DObyudo7hWeF5tXKlfJynfVa61KQZbnzw876Lde/1rq1+g3m8jmv7A18sKK1s1bktLCi286YNcysGQwEbdtuaAev6ZV4ab/0+Xzrr9kkei7q8/mCgeDH2se9n/SuejqyE2kdmalM8mbS+XPqiW3U29cbvxyPfhbVTr65mE6Np3rDvcIjwn3hiQd1p1At2Ut2eansbV9ugHrlVU4YKpVK8wZbl0KlUikvln3KcmzUvy7Nl3ztdYve9wkhrAXL1U6vbV/zW7Ztl56XVNXtEbxYLNY3593rDfemH6ZrR7ENlf1W0jryP+XH7487fwsLCxtN3lrx5+LEDxPpB+nkjaSiuDvWvVZeLNeXtPul6QdpX7tv4M8Dnf7O1HjKfY7mrBkILFeN9a9bW7cUjBkjeDRY/cezYsvGjLEi048ChWJh6wWxTwihdCjpibR+SlcPqN42b//Zfq1bG7vttgWW+DbhU3zJW8nAkUCtOeUmoTFr6D26ekBVFGXwb4Puf0JbTPvGXLx8sbJUGbk5Uv3fI2RZlmVZkqT9/7a/9rohVWYqEwqF9B5dUZTm06AWSxcWFowZ4+JXF3P53IY6MY1ZQzuhRc9Fnf4E9423dUvBmDG0E1riWiLwUSB1J1Vfxxszhrfdm7iWUBQl3BeOfBIxZlo1XF3aJ4SoLFbMrBk7H0vfT4dOhLQTWuTTSPbHrMtNZP+RjX4e1U5omceZ0vPS2HdjLg92I7dGKosVc9bMP80HA8Hr3153v99bSfvG2Et27HysK9TlDCjQT+rFYrFYLEbORtSDqvO6+SKLMWWM3R0b+OtAPp9P3WmsaFsvHbs3JjyiuYe7tfH74/Gr8dgXsXw+7z/sT//gtntk3VKY+GEi3Bf2H/an76etBWvi0fIFitKLUuJqov9Mfz6fH7k5kn+WH/mfkaYctkZRlPquk00kVw+qzVXOuqncNPa3Pe2eFDsfmyvNbfI78Qi3PQEruS+F6SfTsS9XdsB7hHpQ3alClNvlrQQ03i71gFp4VthVw57kdrk2LCR0PGRZ1Y7nN8Uj/IffjVEpaDD5cNKyrGljurnZ/RY5l2ly+VwunzOzZmP1vAPe2+kM8Gb4D/vtV/a29z9unSzL/sN+27abu7EBAL8n7wkhYl/GagO1Pv6Pj112um1C6HjItu3mcZiKomjdWv5ZvvhzY++p/wN/IBBY+NeCmTUZBwxX1ANq6Fho4K8DlmVttNPNvei5qHPWsuJdj5h8OGnNW5OZybnnc7mnufq5EoN/G3ROKZxRWvTQYQPCp8M7F9CKohSeFaafTDcEtJOp07UiSZI5ayZvVsevOr08iasJ4RH6KX3u+VziamIn9g17ySpjORqoB9XY+ZgzpNXhzJjYUAdf4lpi7M5Y87hEvUcvvSg512lt2zZmjNoA4sgnkZf2y/iVuHglMo8ymalMuC/sclyr1CbFzseUDqX/TH/iaqJxVz0idj6mHlC1bi1xNbHWZsOnw4mridCxUOiY24v52EXWqqFlWZ4rzfWf7a+9o5/SrXnL/VUlvUc3s6YkSaO3Rxtq6P6z/db88sDtyczk6J3qlZ3pJ9PTT5ZXdlpEtakDrSkdijM8vPCsMHp71Jq3mgePp+6mcvnc6O3RudJcfUbi9TyLQrGQvJWcez43/WR6E6P58FasX+NVKhVjyoj0RcbvjTvvRPoiZtZc+JergVFSm5S4lrh46eKqp3QTDyZ8is+YMsysGfwwWHheiF+ujm3w+Xxm1pTapPileOr7lNPDKrfL4heXH00IIYKhoL1kBz4KZB5l/If99UN2FEXpCnXZtq2d1FJ3U3K7XJt15pwiB48G7SVbPaias2b9QF7sZus3OcTWZkMkriSKz4rGVKuBVHKb7Gv3Vevp1z8xqU1aWFwIfBCIfhYNnw5bv1pCCO+/b2BunzFrOENh8j/ly5Vyw90FWsyGaDHPArucq4BedzbEWrM/Ah8Fwn3hFrP245fj0U+jwVCw95Pezg8790v7ayPFKpWK2qFmf8zqp/Trf7/uzO0pl13N+nTUX5rK5/MN80fWmg3Rep4Fdjm3kwdT46nop9Ghb4ZWnQ2RmcrUqrH6q69dR7v2e/ZPPq42QCVJ2u/ZXygWLv7lovOT0Ht0Y8qoHutfifSD9MitEfWgWnpRsixLPaQKIZx+a+f4sKEZDfUD4ZV2pRbBrbWeZ4FdbjmgnRvP+Dp8q44HSD9Ixy/FndkQF7640LA0/1N+1dtWZB5n6o/XsfMxn88XvxKv1XnlclPovBIvl14KIcxZ88IXFyRJchoGnYc6Sy9KzTMa/If9vj/4cvlc830XAoGA+F8hhJAkqdPfef2/3Y6Zbp5n8Sbv2IRtk3uaG709GjgSWLVLLnU35VwB2fT21+rl6D/TL8uy03Kt9XKoB1UnO/9h//C3w5ZlRT9bZZrj8I1hy7Ia5oA5vRyFYqH/bL+iKMmbSWveqjUqnF6O+p44a96q78YJnw5b81Z1nsXd1NzzOXo53hUr2tDR81HhEZlHGWPGaG6MbG42RGsTDyaSt5MXvrpQLBaTt5Jm1hy6Vr2tU+lFKfp5VFVVY8aInImMfTc29p3bM9HqDt8Zi1+O5/N5n+IL94VrU9/W36u151lg79jSbIj1KB3KWu35zcyC6VAsywodD216Fka9VeZZ4F23C2dDtLAc0JvytudZYPNc9XJMPpwMHg0WioXEtd/FaApfu8+YMpweFdu2E9cSu3DgPDbPf9j/jlVRHhE4Eqgff7JRsiyHjoVa3MUZAAAAAAAAAAAAAAAAAAAAAAAAwO/Blh4a9Ntvv7Xa9Hs8kQhvmqt72wHvihUBLcuy8xBf4B21sob2CL+fB2/i3SfLcux8bNqYtuYtM2uO3h51cw+A31p6A7sNNKjW0PErcb1HH/pmyJgxYl/GSvOlnXscFrCzJEmaK83pp3S5XU7eSrpPSA2N3WafEMK27dLzkn5Sp1bGHqGd1HJPc3PP58ysqffoLm/sTw2NXS18OpzL5wrFQi6fc3MXWgIau82Kbjtj1jCzZjAQtG07em6V2+UDu9wqVwqdJrWqvlO3GwWEEE5AKx1KeiKtn9LVA6q3zdt/tl/r1sZub+z5D8Bu4BFCVBYrZtaMnY/5D/mFR7y0X0Y+jWR/zL7tfQO2RlGU+mdir4uTQuw2K9rQ9iue9YS9xCNWfULhWqihsdswwB8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALzD3lMU5W3vA7Bt9r3tHQC2EwGNPYWAxp5CQGNPIaCxpxDQ2FMIaOwpBDT2FAIaewoBjT2FgMaeQkBjTyGgsaf8P/5pTBo7Lj13AAAAAElFTkSuQmCC"/>
+</defs>
+<g id="screen-content">
+<g><svg x="137.5" y="168" width="525" height="700" viewBox="0 0 240 320" preserveAspectRatio="none"><use href="#fs-i0"/></svg></g>
+</g>
+    <rect id="glass" x="137.5" y="168" width="525" height="700" fill="url(#ip-glass)" pointer-events="none"/>
+    <path d="M131,874 H669" stroke="#3a3a3d" stroke-width="1"/>
+  </g>
+
+  <!-- side creases running down from the frame -->
+  <g id="creases" fill="none" stroke-linecap="round">
+    <path d="M104,880 C104,960 104,1030 112,1110" stroke="#fff" stroke-opacity="0.55" stroke-width="2"/>
+    <path d="M102,880 C102,960 102,1030 110,1110" stroke="#000" stroke-opacity="0.1" stroke-width="1.5"/>
+    <path d="M696,880 C696,960 696,1030 688,1110" stroke="#fff" stroke-opacity="0.45" stroke-width="2"/>
+    <path d="M698,880 C698,960 698,1030 690,1110" stroke="#000" stroke-opacity="0.12" stroke-width="1.5"/>
+  </g>
+
+  <!-- printed wordmarks -->
+  <g id="wordmarks" fill="#262626" font-family="'Helvetica Neue',Helvetica,Arial,sans-serif">
+    <text x="142" y="938" font-size="32" font-weight="500" letter-spacing="0.2">iPAQ</text>
+    <text x="656" y="936" font-size="29" font-weight="500" text-anchor="end">Pocket PC</text>
+  </g>
+
+  <!-- application buttons -->
+  <g id="app-buttons">
+    <g id="btn-calendar" transform="translate(167,1050)">
+      <use href="#ip-dish-btn"/>
+      <g fill="#111" transform="translate(-9,-8)">
+        <rect width="18" height="4" rx="1"/>
+        <rect y="5.5" width="4.2" height="3.4"/><rect x="4.6" y="5.5" width="4.2" height="3.4"/><rect x="9.2" y="5.5" width="4.2" height="3.4"/><rect x="13.8" y="5.5" width="4.2" height="3.4"/>
+        <rect y="9.8" width="4.2" height="3.4"/><rect x="4.6" y="9.8" width="4.2" height="3.4"/><rect x="9.2" y="9.8" width="4.2" height="3.4"/><rect x="13.8" y="9.8" width="4.2" height="3.4"/>
+        <rect y="14.1" width="4.2" height="3.4"/><rect x="4.6" y="14.1" width="4.2" height="3.4"/><rect x="9.2" y="14.1" width="4.2" height="3.4"/>
+      </g>
+    </g>
+    <g id="btn-contacts" transform="translate(233,1002)">
+      <use href="#ip-dish-btn"/>
+      <g transform="translate(-10,-9)">
+        <rect width="20" height="18" rx="1.5" fill="#111"/>
+        <circle cx="6" cy="6" r="2.6" fill="#cfd0d2"/>
+        <path d="M2,14.5 Q2,9.6 6,9.6 Q10,9.6 10,14.5 Z" fill="#cfd0d2"/>
+        <rect x="12" y="4" width="6" height="1.8" fill="#cfd0d2"/><rect x="12" y="8" width="6" height="1.8" fill="#cfd0d2"/><rect x="12" y="12" width="6" height="1.8" fill="#cfd0d2"/>
+      </g>
+    </g>
+    <g id="btn-mail" transform="translate(567,1002)">
+      <use href="#ip-dish-btn"/>
+      <g transform="translate(-10.5,-7.5)" fill="none" stroke="#111" stroke-width="2.2" stroke-linejoin="round">
+        <rect width="21" height="15" rx="1"/>
+        <path d="M0,0 L10.5,8.5 L21,0 M0,15 L8,7 M21,15 L13,7"/>
+      </g>
+    </g>
+    <g id="btn-home" transform="translate(633,1050)">
+      <use href="#ip-dish-btn"/>
+      <g transform="translate(-10,-10)" fill="#111">
+        <path d="M10,0 L21,9.5 H18 V20 H12.5 V13.5 H7.5 V20 H2 V9.5 H-1 Z"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- navigation pad: chrome housing protruding at the bottom edge -->
+  <g id="navpad">
+    <path id="housing-shadow" d="M314,946 Q400,922 486,946 C503,951 511,960 513,974 L527,1108 C528,1122 520,1129 506,1130 H294 C280,1129 272,1122 273,1108 L287,974 C289,960 297,951 314,946 Z" fill="#000" fill-opacity="0.35" filter="url(#ip-soft)" transform="translate(0,3)"/>
+    <path id="housing" d="M314,946 Q400,922 486,946 C503,951 511,960 513,974 L527,1108 C528,1122 520,1129 506,1130 H294 C280,1129 272,1122 273,1108 L287,974 C289,960 297,951 314,946 Z" fill="url(#ip-housing)" stroke="#2a2b2d" stroke-width="1.2"/>
+    <path d="M314,946 Q400,922 486,946 C503,951 511,960 513,974 L527,1108 C528,1122 520,1129 506,1130 H294 C280,1129 272,1122 273,1108 L287,974 C289,960 297,951 314,946 Z" fill="url(#ip-housing-v)"/>
+    <path d="M316,951 Q400,929 484,951" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="2"/>
+    <path d="M494,960 L506,1100" stroke="#fff" stroke-opacity="0.8" stroke-width="5" filter="url(#ip-soft)"/>
+    <path d="M300,975 L292,1095" stroke="#fff" stroke-opacity="0.45" stroke-width="3" filter="url(#ip-soft)"/>
+    <g id="joystick" transform="translate(400,1052)">
+      <circle r="72" fill="#18191b"/>
+      <circle r="68" fill="url(#ip-chrome-ring)"/>
+      <circle r="58" fill="#141516"/>
+      <circle r="55" fill="url(#ip-joy)"/>
+      <circle r="55" fill="url(#ip-joy-rim)"/>
+      <path d="M-44,-20 Q-30,-46 2,-50 Q-26,-40 -38,-14 Z" fill="#fff" fill-opacity="0.6" filter="url(#ip-soft)"/>
+      <path d="M28,36 Q46,18 46,-6 Q52,22 34,40 Z" fill="#fff" fill-opacity="0.75" filter="url(#ip-soft)"/>
+      <circle r="24" fill="url(#ip-dimple)" fill-opacity="0.45"/>
+      <ellipse cx="4" cy="8" rx="13" ry="5" fill="#fff" fill-opacity="0.25" filter="url(#ip-soft)"/>
+    </g>
+  </g>
+</g>
+
+<!-- notes: vector annotations above the whole device -->
+<g><g transform="translate(137.5 168) scale(2.1875 2.1875)"><g class="notes" font-family="DejaVu Sans,Verdana,Arial,Helvetica,sans-serif" font-weight="700"><g><title>without graphics: nothing is drawn</title><rect x="1.2" y="147" width="221.76" height="18" rx="3" fill="#dc1e1e" stroke="#fff" stroke-width="1"/><text x="6" y="159.84" font-size="12" fill="#fff" textLength="212.16" lengthAdjust="spacingAndGlyphs">without graphics: nothing is drawn</text></g></g></g></g>
+<text font-family="'Helvetica Neue',Helvetica,Arial,sans-serif" font-size="24" fill="#888" text-anchor="middle"><tspan x="400" y="1218.8125">Illustration: headless picowl in a container, not a device</tspan><tspan x="400" y="1250.0125">capture</tspan></text>
+</svg>
