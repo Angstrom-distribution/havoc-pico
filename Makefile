@@ -119,7 +119,14 @@ install: havoc
 uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
 
+check: tests/login
+	tests/login
+
+tests/login: tests/login.c login.h ptyutil.h
+	$(CC) $(CFLAGS) $(CDEFS) -o $@ tests/login.c -lutil
+
 clean:
+	rm -f tests/login
 	rm -f havoc $(XML) $(GEN) $(OBJ) picowl-palette-v1.xml picowl-palette-v1.h picowl-palette-v1.c picowl-palette-v1.o
 
-.PHONY: install uninstall clean
+.PHONY: install uninstall check clean

@@ -46,7 +46,7 @@ make clean
 - The Makefile needs `pkg-config`, `wayland-scanner`, wayland-protocols and the wayland-client, wayland-cursor and xkbcommon development files. New sources go into `OBJ` in the Makefile; nothing is globbed.
 - `PIXFONT_OBJ=pixfont-none.o` builds without the bitmap font data. `EMOJI_DIR` sets the default emoji pack directory.
 - `PICOWL_PALETTE_XML=<path>/picowl-palette-v1.xml` builds the C8 path. The XML comes with picowl and is not in this tree; without it there is no C8 code.
-- `pico` has no test suite. `HAVOC_FULL_REDRAW` in the environment paints and damages the whole window on every redraw: a picture from it is what the incremental drawing must equal.
+- `pico` has one test, `make check` (the login shell, on a pty); the rest has no test suite. `HAVOC_FULL_REDRAW` in the environment paints and damages the whole window on every redraw: a picture from it is what the incremental drawing must equal.
 - Build with every option off and with every option on before proposing a change. Say whether a result came from the host, a container, qemu or a device.
 - Timing and memory are judged on a device, not under emulation.
 

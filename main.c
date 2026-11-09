@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include "ptyutil.h"
+#include "login.h"
 
 #include <xkbcommon/xkbcommon-compose.h>
 #include <wayland-client-core.h>
@@ -263,7 +264,7 @@ static struct {
 } term = {
 	.scale = 120,
 
-	.cfg.shell = "/bin/sh",
+	.cfg.shell = "",
 	.cfg.col = 80,
 	.cfg.row = 24,
 	.cfg.scrollback = 0,
@@ -2449,9 +2450,11 @@ static void setup_pty(char *argv[])
 		if (*argv) {
 			execvp(*argv, argv);
 			prog = *argv;
-		} else {
+		} else if (*term.cfg.shell) {
 			execlp(term.cfg.shell, term.cfg.shell, (char *) NULL);
 			prog = term.cfg.shell;
+		} else {
+			login_shell((const char **) &prog);
 		}
 		fprintf(stderr, "could not execute %s: %s\n", prog,
 			strerror(errno));
