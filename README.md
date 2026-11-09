@@ -21,6 +21,11 @@ then in `$HOME/.config/havoc/` and last in the current working directory.
 
 See the example `havoc.cfg` for available options.
 
+Without a program on the command line and without `program=` in `[child]`, havoc starts
+your login shell: `$SHELL` if it is executable, else the shell in your passwd entry, else
+`/bin/sh`, run as `-name` so that it reads the profile, in `$HOME` (the passwd home if
+`HOME` is unset). `HOME`, `SHELL`, `USER` and `LOGNAME` are set from the passwd entry where
+unset. A program from the command line or the config runs as given, in the current directory.
 
 ## Pictures
 

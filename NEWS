@@ -1,7 +1,7 @@
 # CHANGES IN UNRELEASED (pico):
 
         The pico branch is upstream havoc at commit 73e3467 (version
-        0.7.0-git) with six patches for handhelds with a QVGA-class
+        0.7.0-git) with seven patches for handhelds with a QVGA-class
         panel and about 64 MiB of RAM. There is no pico release or tag
         yet. Status says what is recorded about where they ran.
 
@@ -125,6 +125,17 @@
           a sixel picture scrolling away with the text. They are
           captures of headless picowl in a container.
 
+##        Login shell:
+
+        * With no program on the command line and no [child] program,
+          havoc starts the user's login shell ($SHELL, else the passwd
+          shell, else /bin/sh) as "-name", in $HOME, and sets HOME,
+          SHELL, USER and LOGNAME from the passwd entry where unset.
+          Before, it ran /bin/sh in the working directory it was
+          started in, without a profile. A program from the command
+          line or the config runs as before. There is no new key.
+          "make check" tests it on a pty, without a compositor.
+
 ##        Build:
 
         * PIXFONT_OBJ=pixfont-none.o builds without the bitmap font
@@ -138,9 +149,10 @@
 ##        Status:
 
         * Tests are in tests/ and run with sh tests/run.sh; they cover
-          the pictures, libtsm and the C8 dither. The other patches have
-          no tests, and this repository records no test results or
-          device runs for these patches.
+          the pictures, libtsm and the C8 dither; "make check" tests the
+          login shell on a pty. The other patches have no tests, and
+          this repository records no test results or device runs for
+          these patches.
 
         * havoc.cfg does not list the keys [window] c8 and [font] pixel
           yet.
@@ -159,4 +171,5 @@
           PICOWL_PALETTE_XML, HAVOC_SIXEL, HAVOC_KITTY, HAVOC_PNG. With none
           of them set, havoc behaves as
           upstream except for the damage and the opaque region, and
-          code points that a pack in the default directory has.
+          code points that a pack in the default directory has, and the
+          default program: the login shell, not /bin/sh.
