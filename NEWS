@@ -169,7 +169,8 @@
           configuration, havoc uses the 6x12 bitmap font at size 10
           instead of the 18 pixel outline font. Any [font] size or pixel
           key, or a build with PIXFONT_OBJ=pixfont-none.o, keeps the old
-          default.
+          default. Pictures: doc/images/qvga-font-before-framed.svg and
+          doc/images/qvga-font-after-framed.svg (iPAQ h5550).
 
         * New config keys: [window] c8, [font] pixel, [graphics] sixel,
           kitty, kitty shm and memory. New option: -E.
