@@ -840,6 +840,24 @@ static void fsm_get(struct wl_client *c, struct wl_resource *r, uint32_t id,
 static const struct wp_fractional_scale_manager_v1_interface fsm_impl = {
 	.destroy = vp_destroy, .get_fractional_scale = fsm_get,
 };
+/* wl_output, only with --output WxH: one current mode, as a handheld's
+ * compositor reports it */
+static int out_w, out_h;
+
+static void output_bind(struct wl_client *c, void *d, uint32_t v, uint32_t id)
+{
+	struct wl_resource *r = wl_resource_create(c, &wl_output_interface,
+						   v < 2 ? v : 2, id);
+
+	wl_output_send_geometry(r, 0, 0, 0, 0, WL_OUTPUT_SUBPIXEL_UNKNOWN,
+				"fake", "fake", WL_OUTPUT_TRANSFORM_NORMAL);
+	wl_output_send_mode(r, WL_OUTPUT_MODE_CURRENT, out_w, out_h, 60000);
+	if (wl_resource_get_version(r) >= 2) {
+		wl_output_send_scale(r, 1);
+		wl_output_send_done(r);
+	}
+}
+
 static void fsm_bind(struct wl_client *c, void *d, uint32_t v, uint32_t id)
 {
 	struct wl_resource *r = wl_resource_create(c,
@@ -1261,6 +1279,12 @@ int main(int argc, char *argv[])
 				    !strcmp(m, "composited") ? 0 : -1;
 		} else if (!strcmp(argv[i], "--child") && i + 1 < argc) {
 			D.child_cmd = argv[++i];
+		} else if (!strcmp(argv[i], "--output") && i + 1 < argc) {
+			if (sscanf(argv[++i], "%dx%d", &out_w, &out_h) != 2 ||
+			    out_w <= 0 || out_h <= 0) {
+				fprintf(stderr, "--output wants WxH\n");
+				return 2;
+			}
 		} else if (!strcmp(argv[i], "--fractional")) {
 			fractional = true;
 		} else if (!strcmp(argv[i], "--quiet") && i + 1 < argc) {
@@ -1303,6 +1327,9 @@ int main(int argc, char *argv[])
 				 1, NULL, pm_bind);
 	}
 #endif
+	if (out_w)
+		wl_global_create(C.display, &wl_output_interface, 2, NULL,
+				 output_bind);
 	wl_global_create(C.display, &wl_compositor_interface, 4, NULL,
 			 comp_bind);
 	wl_global_create(C.display, &xdg_wm_base_interface, 1, NULL, wm_bind);
