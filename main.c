@@ -43,6 +43,10 @@ struct picowl_surface_palette_v1;
 
 int font_init(char *);
 void font_scale(int, int *, int *);
+
+/* Outputs whose long edge is at most this many pixels get the small bitmap
+ * font by default. */
+#define QVGA_LONG_EDGE 320
 void font_deinit(void);
 unsigned char *get_glyph(uint32_t, uint32_t, int);
 
@@ -118,6 +122,8 @@ static struct {
 
 	struct wl_display *display;
 	struct wl_registry *registry;
+	/* current modes of the outputs seen: some, and any larger than QVGA */
+	bool out_seen, out_large;
 	struct wl_compositor *cp;
 	struct wl_shm *shm;
 	bool shm_argb;
@@ -300,6 +306,9 @@ static struct {
 		int font_size;
 		char font_path[512];
 		char font_pixel[16];
+		/* set by the configuration, which then wins over the
+		 * default chosen from the output */
+		bool font_size_set, font_pixel_set;
 #if HAVE_GRAPHICS
 		struct gfx_config gfx;
 #endif
@@ -2783,10 +2792,50 @@ static const struct picowl_surface_palette_v1_listener pal_listener = {
 };
 #endif
 
+static void output_geometry(void *data, struct wl_output *o, int32_t x,
+			    int32_t y, int32_t pw, int32_t ph, int32_t subpixel,
+			    const char *make, const char *model,
+			    int32_t transform)
+{
+}
+
+/* The pixel count is what a compositor always reports; the millimetres are
+ * often 0 on handhelds. The rotation does not matter, so compare the long
+ * edge. */
+static void output_mode(void *data, struct wl_output *o, uint32_t flags,
+			int32_t w, int32_t h, int32_t refresh)
+{
+	if (!(flags & WL_OUTPUT_MODE_CURRENT))
+		return;
+	term.out_seen = true;
+	if ((w > h ? w : h) > QVGA_LONG_EDGE)
+		term.out_large = true;
+}
+
+static void output_done(void *data, struct wl_output *o)
+{
+}
+
+static void output_scale(void *data, struct wl_output *o, int32_t factor)
+{
+}
+
+static const struct wl_output_listener output_listener = {
+	.geometry = output_geometry,
+	.mode = output_mode,
+	.done = output_done,
+	.scale = output_scale,
+};
+
 static void registry_get(void *data, struct wl_registry *r, uint32_t id,
 			 const char *i, uint32_t version)
 {
-	if (strcmp(i, "wl_compositor") == 0) {
+	if (strcmp(i, "wl_output") == 0) {
+		struct wl_output *o = wl_registry_bind(r, id,
+			&wl_output_interface, version < 2 ? version : 2);
+
+		wl_output_add_listener(o, &output_listener, NULL);
+	} else if (strcmp(i, "wl_compositor") == 0) {
 		term.cp = wl_registry_bind(r, id, &wl_compositor_interface, 4);
 	} else if (strcmp(i, "wl_shm") == 0) {
 		term.shm = wl_registry_bind(r, id, &wl_shm_interface, 1);
@@ -2825,6 +2874,21 @@ static void registry_get(void *data, struct wl_registry *r, uint32_t id,
 		term.fsm = wl_registry_bind(r, id,
 			&wp_fractional_scale_manager_v1_interface, 1);
 	}
+}
+
+/* A QVGA-class output has too few pixels for the 18 pixel outline font:
+ * a command line wraps after 30 columns. Without a font size or a bitmap
+ * font in the configuration, such an output gets the 6x12 bitmap font at
+ * size 10, as the handhelds' own configuration has it. */
+static void qvga_font_default(void)
+{
+	if (!term.out_seen || term.out_large || term.cfg.font_size_set ||
+	    term.cfg.font_pixel_set)
+		return;
+	if (pixfont_select("6x12") < 0)
+		return;
+	term.cfg.font_size = 10;
+	font_scale(term.cfg.font_size, &term.cwidth, &term.cheight);
 }
 
 static void setup_deco(void)
@@ -3009,14 +3073,18 @@ static void terminal_config(char *key, char *val)
 
 static void font_config(char *key, char *val)
 {
-	if (strcmp(key, "size") == 0)
+	if (strcmp(key, "size") == 0) {
 		term.cfg.font_size = cfg_num(val, 10, 6, 300);
+		term.cfg.font_size_set = true;
+	}
 	else if (strcmp(key, "path") == 0)
 		strncpy(term.cfg.font_path, val,
 			sizeof(term.cfg.font_path) - 1);
-	else if (strcmp(key, "pixel") == 0)
+	else if (strcmp(key, "pixel") == 0) {
 		strncpy(term.cfg.font_pixel, strcmp(val, "no") == 0 ? "" : val,
 			sizeof(term.cfg.font_pixel) - 1);
+		term.cfg.font_pixel_set = true;
+	}
 }
 
 static void graphics_config(char *key, char *val)
@@ -3324,6 +3392,7 @@ retry:
 	wl_display_roundtrip(term.display);
 	if (term.shm_argb == false)
 		fail(eglobals, "missing required ARGB8888 shm format");
+	qvga_font_default();
 
 	cursor_init();
 	cursor_load();
