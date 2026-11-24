@@ -2,6 +2,7 @@ VERSION = "0.7.0-git"
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
+DATADIR ?= $(PREFIX)/share
 
 PKG_CONFIG ?= pkg-config
 WAYLAND_SCANNER ?= wayland-scanner
@@ -138,12 +139,25 @@ text-input-unstable-v3.xml:
 picowl-palette-v1.xml:
 	cp $(PICOWL_PALETTE_XML) $@
 
+ICON_SIZES = 16x16 22x22 24x24 32x32 48x48 64x64 128x128
+
 install: havoc
 	mkdir -p $(DESTDIR)$(BINDIR)
 	install -m 755 havoc $(DESTDIR)$(BINDIR)/havoc
+	mkdir -p $(DESTDIR)$(DATADIR)/applications
+	install -m 644 data/havoc.desktop $(DESTDIR)$(DATADIR)/applications/havoc.desktop
+	mkdir -p $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps
+	install -m 644 data/icons/hicolor/scalable/apps/havoc.svg $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/havoc.svg
+	for s in $(ICON_SIZES); do \
+		mkdir -p $(DESTDIR)$(DATADIR)/icons/hicolor/$$s/apps; \
+		install -m 644 data/icons/hicolor/$$s/apps/havoc.png $(DESTDIR)$(DATADIR)/icons/hicolor/$$s/apps/havoc.png; \
+	done
 
 uninstall:
 	rm $(DESTDIR)$(BINDIR)/havoc
+	rm -f $(DESTDIR)$(DATADIR)/applications/havoc.desktop
+	rm -f $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/havoc.svg
+	for s in $(ICON_SIZES); do rm -f $(DESTDIR)$(DATADIR)/icons/hicolor/$$s/apps/havoc.png; done
 
 check: tests/login
 	tests/login

@@ -5,6 +5,15 @@
         panel and about 64 MiB of RAM. There is no pico release or tag
         yet. Status says what is recorded about where they ran.
 
+##        Install:
+
+        * make install puts havoc.desktop (name Terminal, Exec=havoc,
+          which starts a login shell) and the icon in DATADIR
+        ($(PREFIX)/share by default): havoc.svg in hicolor/scalable and
+        PNGs at 16, 22, 24, 32, 48, 64 and 128 px, so a launcher that
+        lists applications shows havoc. doc/images/havoc-icon-sizes.png
+        shows the icon. It is a host render, not a device capture.
+
 ##        On-screen keyboard:
 
         * Havoc binds zwp_text_input_manager_v3 when the compositor
