@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+GenericName=Terminal Emulator
+Comment=Run commands in a login shell
+Exec=havoc
+TryExec=havoc
+Icon=havoc
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupWMClass=havoc

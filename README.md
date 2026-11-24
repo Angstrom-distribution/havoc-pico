@@ -14,6 +14,8 @@ make CFLAGS="-O2 -DNDEBUG"
 make install
 ```
 
+`make install` also installs `havoc.desktop` and the icon (a scalable SVG and PNGs from 16 to 128 px) under `$(DATADIR)`, `$(PREFIX)/share` by default, so a launcher lists havoc as Terminal.
+
 ## Configure
 
 havoc will search for a file called `havoc.cfg` in `$XDG_CONFIG_HOME/havoc/` first,
